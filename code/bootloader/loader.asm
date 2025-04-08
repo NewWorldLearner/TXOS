@@ -3,7 +3,7 @@ KERNEL_BIN_BASE_ADDR equ	0x100000				;内核在内存在的起始地址
 
 MemoryStructBufferAddr	equ	0x7E00					;物理内存布局信息的存放处
 
-SECTION LOADER vstart=0x10000
+org 0x10000
 	jmp Start_Loader
 
 ;------------------要进入64位模式，首先要进入32位保护模式，定义32位模式下的GDT表--------------
@@ -50,6 +50,7 @@ SelectorData64	equ	GDT64_DESC_DATA - GDT64_BASE
 [BITS 16]
 
 Start_Loader:
+
 	mov	ax,	cs
 	mov	ds,	ax
 	mov	es,	ax
@@ -96,36 +97,6 @@ Start_Loader:
 	mov	cr0,	eax
 
 	sti
-
-;-----------------------------加载内核到1MB内存处----------------------
-
-   	mov	ax,	1301h
-	mov	bx,	000Fh
-	mov	dx,	0200h		;row 2
-	mov	cx,	17
-	push	ax
-	mov	ax,	ds
-	mov	es,	ax
-	pop	ax
-	mov	bp,	STARTLOADKERNEL
-	int	10h
-
-;   mov eax, KERNEL_START_SECTOR        ; kernel.bin所在的扇区号
-;   mov ebx, 0x100000       ; 从磁盘读出后，写入到ebx指定的地址
-;   mov ecx, 10			       		   ; 读入的扇区数，先假设内核大小在150KB以内
-;   call rd_disk_m_32				   ;借助ebx而不是使用fs会有问题吗？稍后需要测试一下
-
-
-   	mov	ax,	1301h
-	mov	bx,	000Fh
-	mov	dx,	0300h		;row 3
-	mov	cx,	22
-	push	ax
-	mov	ax,	ds
-	mov	es,	ax
-	pop	ax
-	mov	bp,	ENDLoadKERNEL
-	int	10h
 
 ;------------------------获取物理内存信息---------------
 	mov	ax,	1301h
@@ -258,43 +229,53 @@ Label_Get_Mem_OK:
 	mov	esi,	dword	[es:si]							;将VDE模式信息的内存地址付给esi
 	mov	edi,	0x8200									;每个模式号都有1个模式信息块结构，它们保存在0x8200处
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;-----------------检测VBE模式-------------
+	;mov cx,0x107
+	;mov	ax,	4F01h
+	;int	10h
+	;cmp	ax,	004Fh
+	;jnz	Label_SVGA_Mode_Info_FAIL
+
+	
 	jmp Label_SVGA_Mode_Info_Finish
 
-Label_SVGA_Mode_Info_Get:								;开始遍历模式列表
+;Label_SVGA_Mode_Info_Get:								;开始遍历模式列表
+;
+;	mov	cx,	word	[es:esi]							;VBE模式号占用0-13位，D14=1采用线性帧缓冲区，D15=1保留显示缓存，每个模式号占两字节
+;														;由于VBE中存在多个模式号，因此VideoModeList指针指向的是模式号的数组
+;
+;;-------------------------------VBE的模式信息占两字节，用16进制显示出这两个字节的值--------------------------
+;
+;	push	ax
+;	
+;	mov	ax,	00h
+;	mov	al,	ch
+;	call	Label_DispAL								;显示VBE模式的高字节
+;
+;	mov	ax,	00h
+;	mov	al,	cl	
+;	call	Label_DispAL							    ;显示VBE模式的低字节
+;	
+;	pop	ax
+;
+;;=======
+;	
+;	cmp	cx,	0FFFFh										;模式数组中最后一个字的值为0xFFFF，表示模式数组的结束
+;	jz	Label_SVGA_Mode_Info_Finish
+;
+;	mov	ax,	4F01h										;Al=01Ah,获取指定模式号的VBE模式信息
+;	int	10h
+;
+;	cmp	ax,	004Fh										;返回值AL!=4FH则说明调用失败
+;
+;	jnz	Label_SVGA_Mode_Info_FAIL						;这里很奇怪，在多次遍历的时候，某一次执行到该语句使得虚拟机卡死了
+;
+;	add	esi,	2										;指向模式数组中的下一个模式号
+;	add	edi,	0x100									;下一个模式信息的保存地址
+;
+;	jmp	Label_SVGA_Mode_Info_Get
 
-	mov	cx,	word	[es:esi]							;VBE模式号占用0-13位，D14=1采用线性帧缓冲区，D15=1保留显示缓存，每个模式号占两字节
-														;由于VBE中存在多个模式号，因此VideoModeList指针指向的是模式号的数组
-
-;-------------------------------VBE的模式信息占两字节，用16进制显示出这两个字节的值--------------------------
-
-	push	ax
-	
-	mov	ax,	00h
-	mov	al,	ch
-	call	Label_DispAL								;显示VBE模式的高字节
-
-	mov	ax,	00h
-	mov	al,	cl	
-	call	Label_DispAL							    ;显示VBE模式的低字节
-	
-	pop	ax
-
-;=======
-	
-	cmp	cx,	0FFFFh										;模式数组中最后一个字的值为0xFFFF，表示模式数组的结束
-	jz	Label_SVGA_Mode_Info_Finish
-
-	mov	ax,	4F01h										;Al=01Ah,获取指定模式号的VBE模式信息
-	int	10h
-
-	cmp	ax,	004Fh										;返回值AL!=4FH则说明调用失败
-
-	jnz	Label_SVGA_Mode_Info_FAIL						;这里很奇怪，在多次遍历的时候，某一次执行到该语句使得虚拟机卡死了
-
-	add	esi,	2										;指向模式数组中的下一个模式号
-	add	edi,	0x100									;下一个模式信息的保存地址
-
-	jmp	Label_SVGA_Mode_Info_Get
 		
 Label_SVGA_Mode_Info_FAIL:
 
@@ -329,12 +310,20 @@ Label_SVGA_Mode_Info_Finish:
 ;--------------------------设置VBE显示模式-----------------
 ;VBE模式设置成功以后，我们不能再通过int 10中断来显示字符串了，原因是VBE图形模式会禁用BIOS文本模式缓冲区(0xB8000)
 
+	mov cx,0
+	mov cx,0
+	mov cx,0
+	mov cx,0
+	mov cx,0
+	mov cx,0
 	mov	ax,	4F02h							;AL=0x02,设置VBE显示模式
-	mov	bx,	4183h							;bx=VBE模式号，mode : 0x180 or 0x143，设置为0x180时失败了
+	mov	bx,	4180h							;bx=VBE模式号，mode : 0x180 or 0x143，设置为0x180时失败了  //4代表模式的第14位，表示使用线性帧缓存区
 	int 	10h
 
 	cmp	ax,	004Fh							;返回值AL!=4FH则说明调用失败
 	jnz	Label_SET_SVGA_Mode_VESA_VBE_FAIL
+
+
 
 ;-----------------------进入保护模式----------------------
 
@@ -350,8 +339,7 @@ Label_SVGA_Mode_Info_Finish:
 	or	eax,	1
 	mov	cr0,	eax
 
-	jmp	dword SelectorCode32:GO_TO_TMP_Protect
-
+	jmp	dword SelectorCode32:GO_TO_TMP_Protect			;一开始我使用的vstart指定的第一个段的起始地址为0x10000，但是我忽略了我在程序中定义了多个段，因此这里出现了错误
 
 [SECTION .s32]
 [BITS 32]
@@ -364,6 +352,15 @@ GO_TO_TMP_Protect:
 	mov	ss,	ax
 	mov	esp,0x7c00
 
+
+;------------------------加载内核到1MB内存处--------------------
+
+   mov eax, KERNEL_START_SECTOR        ;kernel.bin所在的扇区号
+   mov ebx, KERNEL_BIN_BASE_ADDR       ;从磁盘读出后，写入到ebx指定的地址
+   mov ecx, 255			       		   ; 读入的扇区数，注意一次最多读取256个扇区（传入的参数为0时读取256个扇区）
+   call rd_disk_m_32				   
+
+;------------------------进入64位模式--------------------
 	call	support_long_mode
 	test	eax,	eax
 
@@ -525,26 +522,8 @@ rd_disk_m_32:
       mov dx, 0x1f0
   .go_on_read:
       in ax,dx		
-      mov [fs:ebx], ax
+      mov [ebx], ax
       add ebx, 2
-			  ; 由于在实模式下偏移地址为16位,所以用bx只会访问到0~FFFFh的偏移。
-			  ; loader的栈指针为0x900,bx为指向的数据输出缓冲区,且为16位，
-			  ; 超过0xffff后,bx部分会从0开始,所以当要读取的扇区数过大,待写入的地址超过bx的范围时，
-			  ; 从硬盘上读出的数据会把0x0000~0xffff的覆盖，
-			  ; 造成栈被破坏,所以ret返回时,返回地址被破坏了,已经不是之前正确的地址,
-			  ; 故程序出会错,不知道会跑到哪里去。
-			  ; 所以改为ebx代替bx指向缓冲区,这样生成的机器码前面会有0x66和0x67来反转。
-			  ; 0X66用于反转默认的操作数大小! 0X67用于反转默认的寻址方式.
-			  ; cpu处于16位模式时,会理所当然的认为操作数和寻址都是16位,处于32位模式时,
-			  ; 也会认为要执行的指令是32位.
-			  ; 当我们在其中任意模式下用了另外模式的寻址方式或操作数大小(姑且认为16位模式用16位字节操作数，
-			  ; 32位模式下用32字节的操作数)时,编译器会在指令前帮我们加上0x66或0x67，
-			  ; 临时改变当前cpu模式到另外的模式下.
-			  ; 假设当前运行在16位模式,遇到0X66时,操作数大小变为32位.
-			  ; 假设当前运行在32位模式,遇到0X66时,操作数大小变为16位.
-			  ; 假设当前运行在16位模式,遇到0X67时,寻址方式变为32位寻址
-			  ; 假设当前运行在32位模式,遇到0X67时,寻址方式变为16位寻址.
-
       loop .go_on_read
       ret
 
