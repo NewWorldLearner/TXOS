@@ -92,7 +92,7 @@ Start_Loader:
 	mov	ax,	0x00
 	mov	es,	ax
 	mov	di,	MemoryStructBufferAddr		;地址范围描述符结构体ARDS的存放地址
-	mov dword [MemoryStructLength], 0;
+	mov word [es:MemoryStructLength], 0	;这里注意dx的值为0x1000，因此我们要显示指定数据段寄存器为es
 
 Label_Get_Mem_Struct:
 
@@ -101,7 +101,7 @@ Label_Get_Mem_Struct:
 	mov	edx,	0x534D4150				;固定签名，它是SMAP的ASCII码值
 	int	15h
 	jc	Label_Get_Mem_Fail				;调用失败时，CF标志位为1
-	inc dword [MemoryStructLength]		;调用成功时，ARDS结构体的数量增加1
+	inc dword [es:MemoryStructLength]		;调用成功时，ARDS结构体的数量增加1
 	add	di,	20
 
 	cmp	ebx,	0						;调用结束后，ebx是下一个ARDS的地址，若为0，则表示本次返回的是最后一个ARDS结构体
