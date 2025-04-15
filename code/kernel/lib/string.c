@@ -1,5 +1,5 @@
-#include "stdint.h"
-#include "string.h"
+#include "../include/stdint.h"
+#include "../include/string.h"
 // #include "debug.h"
 
 #define NULL (void *)0

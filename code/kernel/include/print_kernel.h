@@ -1,9 +1,6 @@
 #ifndef _PRINT_KERNEL_H_
 #define _PRINT_KERNEL_H_
 
-
-#define NULL (void *)0
-
 #define WHITE 	0x00ffffff		//白
 #define BLACK 	0x00000000		//黑
 #define RED	0x00ff0000			//红

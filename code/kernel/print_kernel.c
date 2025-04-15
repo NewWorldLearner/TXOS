@@ -1,9 +1,11 @@
 
 #include <stdarg.h>
-#include "lib/stdint.h"
-#include "lib/string.h"
-#include "print_kernel.h"
-#include "font.h"
+#include "include/stdint.h"
+#include "include/string.h"
+#include "include/print_kernel.h"
+#include "include/font.h"
+
+#define NULL (void *)0
 
 struct position Pos;
 
@@ -120,8 +122,9 @@ static void itoa(uint64_t value, char **buf, uint8_t base)
 
     if (value == 0)
     {
-        (*buf)[0] = '0';
-        (*buf)[1] = '\0';
+        // (*buf)[0] = '0';     // 曾经这样写导致打印整型0的时候显示不出来
+        // (*buf)[1] = '\0';
+        *(*buf)++ = '0';
         return;
     }
     // 64位整型，使用65个字符足以表示了
