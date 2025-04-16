@@ -8,11 +8,19 @@ extern struct Global_Memory_Descriptor memory_management_struct;
 void Start_Kernel(void)
 {
     init_screen();
-	printf("test %x\n", 255);
-	printf("test number %d\n", 255);
-	printf("test string %s", "this is a string\n");
-	printf("test int 0: %d\n", 0);
 	init_memory();
+	struct Page *page = alloc_pages(ZONE_DMA, 1, 0);
+	printf("alloc a page, address:0x%x\n", page->PHY_address);
+
+	page = alloc_pages(ZONE_DMA, 1, 0);
+	printf("alloc a page, address:0x%x\n", page->PHY_address);
+
+	free_pages(page, 1);
+	printf("free a page, address:0x%x\n", page->PHY_address);
+	
+	page = alloc_pages(ZONE_DMA, 1, 0);
+	printf("alloc a page, address:0x%x\n", page->PHY_address);
+
 	while (1)
 		;
 }

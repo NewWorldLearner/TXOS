@@ -2,6 +2,7 @@
 #include "include/string.h"
 #include "include/debug.h"
 #include "include/print_kernel.h"
+#include "include/bitmap.h"
 
 #define NULL (void *)0
 
@@ -83,7 +84,7 @@ static void init_memory_descriptors()
     for (int i = 0; i < count; i++)
     {
         memory_management_struct.e820[i] = *p++;
-        printf("e820 %d address %x, length %d\n", i, memory_management_struct.e820[i].address, memory_management_struct.e820[i].length);
+        printf("e820 %d address: %x, length: %d tyep:%d\n", i, memory_management_struct.e820[i].address, memory_management_struct.e820[i].length, memory_management_struct.e820[i].type);
     }
     // 这里我们可以计算并打印出操作系统可用的2MB物理页的数量作为提示
     // 但是我这里不打印
@@ -93,7 +94,7 @@ static void init_memory_descriptors()
 static void init_memory_bitmap()
 {
     // 最大可用的物理内存
-    int TotalMem = calculate_total_memory();
+    uint64_t TotalMem = calculate_total_memory();
 
     // --------------------下面进行物理页映射位图的初始化------------------------
 
@@ -118,7 +119,7 @@ static void init_memory_pages()
     // 页结构体数组安排在位图结束后的向上取整4KB对齐起始处
     memory_management_struct.pages_struct = (struct Page *)(((uint64_t)memory_management_struct.bits_map + memory_management_struct.bits_length + PAGE_4K_SIZE - 1) & PAGE_4K_MASK);
     uint64_t total_memory = calculate_total_memory();
-    printf("total memory: %d M\n", total_memory / 1024 / 1024);
+    printf("total memory: %d bytes = %d M\n", total_memory, total_memory / 1024 / 1024);
     // 页结构体数量，内存结尾处不足2MB的内存直接丢弃不使用
     memory_management_struct.pages_size = total_memory >> PAGE_2M_SHIFT;
     printf("page count:%d\n", memory_management_struct.pages_size);
@@ -156,6 +157,7 @@ static void process_zone(struct E820 *entry)
 
     // 记录zone的个数，注意zones_size的初始值为0
     struct Zone *zone = &(memory_management_struct.zones_struct[memory_management_struct.zones_size++]);
+    printf("process zones_size %d\n", memory_management_struct.zones_size);
     // 记录zone的起始物理地址
     zone->zone_start_address = start;
     // 记录zone的结束物理地址
@@ -229,14 +231,15 @@ void init_memory()
     {
         if (memory_management_struct.e820[i].type == 1)
         {
+            printf("process zone %d\n", i);
             process_zone(&memory_management_struct.e820[i]);
         }
     }
 
     // 对于低1MB内存，其内存布局比较复杂，因此我们对于第1个物理页，要进行特殊的初始化,我们把它规划到第1个zone区域中
-    memory_management_struct.pages_struct->zone_struct = memory_management_struct.zones_struct;
+    memory_management_struct.pages_struct[0].zone_struct = memory_management_struct.zones_struct;
 
-    memory_management_struct.pages_struct->PHY_address = 0UL;
+    memory_management_struct.pages_struct[0].PHY_address = 0UL;
     set_page_attribute(memory_management_struct.pages_struct, PG_PTable_Maped | PG_Kernel_Init | PG_Kernel);
     memory_management_struct.pages_struct->reference_count = 1;
     memory_management_struct.pages_struct->create_time = 0;
@@ -264,7 +267,12 @@ void init_memory()
 
     // 之前我们使用的地址都是虚拟地址，现在要对这些虚拟地址对应的物理页进行标记，标记它们使用过
     mark_used_pages();
-
+    printf("used page bitmap: 0x");
+    for (int i = 0; i <= (Virt_To_Phy(memory_management_struct.end_of_struct) >> PAGE_2M_SHIFT); i++)
+    {
+        printf("%x ", memory_management_struct.bits_map[i]);
+    }
+    printf("\n");
     // 获取GDT的物理地址
     Global_CR3 = get_gdt();
 
@@ -273,4 +281,101 @@ void init_memory()
     //     *(Phy_To_Virt(Global_CR3) + i) = 0UL;
     // 刷新页表
     flush_tlb();
+}
+
+//------------------------------------------------------------------------
+//--------------------------以上是init_memory函数的实现--------------------
+//------------------------------------------------------------------------
+
+
+
+// 下面的函数是存在一些问题的，后面再进行优化,它假设了申请内存区域一定会成功，还有其它的细节问题
+struct Page *alloc_pages(int zone_select, int number, uint64_t page_flags)
+{
+    uint64_t attribute = 0;
+    // zone的开始索引
+    int zone_start_index = 0;
+    // zone的结束索引
+    int zone_end_index = 0;
+
+    if (number >= 64 || number <= 0)
+    {
+        printf("alloc_pages() ERROR: number is invalid\n");
+        return NULL;
+    }
+    int free_index = 0;
+    switch (zone_select)
+    {
+        // 直接映射区域,一个映射区域可能包含多个zone
+        case ZONE_DMA:
+            zone_start_index = 0;
+            zone_end_index = ZONE_DMA_INDEX;
+            attribute = PG_PTable_Maped;
+            break;
+        // 正常映射区域
+        case ZONE_NORMAL:
+            zone_start_index = ZONE_DMA_INDEX;
+            zone_end_index = ZONE_NORMAL_INDEX;
+            attribute = PG_PTable_Maped;
+            break;
+        // 未映射区域
+        case ZONE_UNMAPED:
+            zone_start_index = ZONE_UNMAPED_INDEX;
+            zone_end_index = memory_management_struct.zones_size - 1;
+            attribute = 0;
+            break;
+        default:
+            printf("alloc_pages() ERROR: zone_select index is invalid\n");
+            return NULL;
+            break;
+    }
+
+    for (int i = zone_start_index; i <= zone_end_index; i++)
+    {
+        struct Zone *zone = memory_management_struct.zones_struct + i;
+        int bit_start = zone->zone_start_address >> PAGE_2M_SHIFT;
+        int bit_end = zone->zone_end_address >> PAGE_2M_SHIFT;
+        int zone_bitmap_length = (bit_end - bit_start) / 8;
+        free_index = bitmap_scan(memory_management_struct.bits_map, zone_bitmap_length, number);
+
+        if (free_index == -1)
+        {
+            continue;
+        }
+        for (int j = 0; j < number; j++)
+        {
+            struct Page *page = memory_management_struct.pages_struct + free_index + j;
+            page_init(page, page_flags);
+            *(memory_management_struct.bits_map + ((page->PHY_address >> PAGE_2M_SHIFT) >> 6)) |= 1UL << (page->PHY_address >> PAGE_2M_SHIFT) % 64;
+            zone->page_using_count++;
+            zone->page_free_count--;
+        }
+        break;
+    }
+    return memory_management_struct.pages_struct + free_index;
+}
+
+void free_pages(struct Page *page, int number)
+{
+    int i = 0;
+
+    if (page == NULL)
+    {
+        printf("free_pages() ERROR: page is invalid\n");
+        return;
+    }
+
+    if (number >= 64 || number <= 0)
+    {
+        printf("free_pages() ERROR: number is invalid\n");
+        return;
+    }
+
+    for (i = 0; i < number; i++, page++)
+    {
+        *(memory_management_struct.bits_map + ((page->PHY_address >> PAGE_2M_SHIFT) >> 6)) &= ~(1UL << (page->PHY_address >> PAGE_2M_SHIFT) % 64);
+        page->zone_struct->page_using_count--;
+        page->zone_struct->page_free_count++;
+        page->attribute = 0;
+    }
 }

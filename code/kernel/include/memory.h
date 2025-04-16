@@ -194,3 +194,5 @@ static uint64_t *get_gdt()
 #define Phy_to_2M_Page(kaddr) (memory_management_struct.pages_struct + ((uint64_t)(kaddr) >> PAGE_2M_SHIFT))
 
 void init_memory();
+struct Page *alloc_pages(int zone_select, int number, uint64_t page_flags);
+void free_pages(struct Page *page, int number);
