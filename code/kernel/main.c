@@ -21,20 +21,29 @@ void Start_Kernel(void)
 	page = alloc_pages(ZONE_DMA, 1, 0);
 	printf("alloc a page, address:0x%x\n", page->PHY_address);
 
-	// init_memory_slab似乎存在缺页异常的bug
-	// printf("init memory slab descripter\n");
-	// init_memory_slab();
-	// printf("init memory slab descripter end\n");
 
-	// // kmalloc 似乎存在缺页异常的bug，待修复
-	// char *str = kmalloc(32, 0);
-	// printf("malloc memory block address:%x\n",1);
+	// 测试中断
+	idt_init();
 
-	// 下面的测试也是有问题的，因为依赖kmalloc
+	printf("init memory slab descripter\n");
+	init_memory_slab();
+	printf("init memory slab descripter end\n");
+
+	char *str = kmalloc(32, 0);
+	printf("malloc memory block address:%x\n",str);
+
+	char *str1 = kmalloc(32, 0);
+	printf("malloc memory block address:%x\n", str1);
+
+	kfree(str1);
+
+	char *str2 = kmalloc(32, 0);
+	printf("malloc memory block address:%x\n", str2);
+
 	// 测试页表的初始化
-	// printf("init pagetable\n");
-	// pagetable_init();
-	// printf("init pagetable end\n");
+	printf("init pagetable\n");
+	pagetable_init();
+	printf("init pagetable end\n");
 
 	while (1)
 		;

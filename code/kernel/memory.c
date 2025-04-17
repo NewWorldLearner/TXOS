@@ -50,6 +50,8 @@ int ZONE_UNMAPED_INDEX = 0; // above 1GB RAM,unmapped in pagetable
 
 uint64_t *Global_CR3 = NULL;
 
+// 这个全局数据曾经没有被成功初始化，结果为0，原因是编译提取出来的纯二进制文件已经超过了50KB，但是写入到磁盘的时候，只写入了100扇区
+// 所以内核程序被加载到内存中时，数据区的后面部分数据全为0      ~V~
 struct Slab_cache kmalloc_cache_size[16] =
     {
         {32, 0, 0, NULL, NULL, NULL, NULL},
@@ -130,8 +132,6 @@ static void init_memory_descriptors()
     uint64_t count = *(uint64_t *)0xffff800000007e00;
     // 记录ARDS结构体的最大偏移量
     memory_management_struct.e820_length = count - 1; // 这里曾经因为手误写成了memory_management_struct.e820->length
-    printf("ARDS number:%d\n", count);
-    // 让global_memory_desciptor记录0x7E20开始处的ARDS结构体信息
     for (int i = 0; i < count; i++)
     {
         memory_management_struct.e820[i] = *p++;
@@ -314,7 +314,7 @@ void init_memory()
     // 内存管理单元的结束地址
     memory_management_struct.end_of_struct = (uint64_t)((uint64_t)memory_management_struct.zones_struct + memory_management_struct.zones_length + sizeof(long) * 32) & (~(sizeof(long) - 1));
 
-    printf("start_code:%x,end_code:x,end_data:%x,end_brk:%x,end_of_struct:%x\n", memory_management_struct.start_code, memory_management_struct.end_code, memory_management_struct.end_data, memory_management_struct.end_brk, memory_management_struct.end_of_struct);
+    printf("start_code:%x, end_code:%x ,end_data:%x,end_brk:%x,end_of_struct:%x\n", memory_management_struct.start_code, memory_management_struct.end_code, memory_management_struct.end_data, memory_management_struct.end_brk, memory_management_struct.end_of_struct);
 
     // 之前我们使用的地址都是虚拟地址，现在要对这些虚拟地址对应的物理页进行标记，标记它们使用过
     mark_used_pages();
@@ -536,25 +536,18 @@ uint64_t init_memory_slab()
 // 从Slab_cache中查找一个可用的slab
 static struct Slab *find_available_slab(struct Slab_cache *cache)
 {
-    printf("find_available_slab\n");
     struct Slab *slab = cache->cache_pool;
-    printf("struct Slab *slab = cache->cache_pool;  0x%x\n", slab);
-    printf("slab->free_count %d\n", slab->free_count);
     do
     {
-        printf("find_available_slab list next\n");
         if (slab->free_count == 0)
         {
-            printf("slab->free_count == 0\n");
             slab = container_of(list_next(&slab->list), struct Slab, list);
         }
         else
         {
-            printf("return slab\n");
             return slab;
         }
     } while (slab != cache->cache_pool);
-    printf("find_available_slab end\n\n");
     return NULL;
 }
 
@@ -575,7 +568,6 @@ static void *allocate_from_slab(struct Slab *slab, struct Slab_cache *cache)
 
 void *kmalloc(uint64_t size, uint64_t gfp_flages)
 {
-    printf("kmalloc\n");
     int i, j;
     struct Slab_cache *slab_cache = NULL;
     if (size > 1048576)
