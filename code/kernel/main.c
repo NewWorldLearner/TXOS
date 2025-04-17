@@ -21,6 +21,15 @@ void Start_Kernel(void)
 	page = alloc_pages(ZONE_DMA, 1, 0);
 	printf("alloc a page, address:0x%x\n", page->PHY_address);
 
+	// init_memory_slab似乎存在bug
+	// printf("init memory slab descripter\n");
+	// init_memory_slab();
+	// printf("init memory slab descripter end\n");
+
+	// // kmalloc 似乎存在缺页异常的bug，待修复
+	// char *str = kmalloc(32, 0);
+	// printf("malloc memory block address:%x\n",1);
+
 	while (1)
 		;
 }

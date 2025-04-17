@@ -2,6 +2,12 @@
 #include "list.h"
 #include "stdint.h"
 
+#define container_of(ptr, type, member)                           \
+    ({                                                            \
+        typeof(((type *)0)->member) *p = (ptr);                   \
+        (type *)((uint64_t)p - (uint64_t)&(((type *)0)->member)); \
+    })
+
 #define KERNEL_START ((uint64_t)0xffff800000000000)
 
 #define PAGE_GDT_SHIFT 39
@@ -193,6 +199,36 @@ static uint64_t *get_gdt()
 #define Virt_To_2M_Page(kaddr) (memory_management_struct.pages_struct + (Virt_To_Phy(kaddr) >> PAGE_2M_SHIFT))
 #define Phy_to_2M_Page(kaddr) (memory_management_struct.pages_struct + ((uint64_t)(kaddr) >> PAGE_2M_SHIFT))
 
+struct Slab
+{
+    struct List list;  // 用于链接其它的Slab块
+    struct Page *page; // 一个Slab块指向一个内存页
+
+    uint64_t using_count; // 本Slab中已使用的内存块数量
+    uint64_t free_count;  // 本Slab中可使用的内存块数量
+
+    void *Vaddress; // 记录当前页面所在的线性地址
+
+    uint64_t color_length; // 位图占用的字节数
+    uint64_t color_count;  // 内存块的数量，也就是位图中的有效的位数量
+
+    uint64_t *color_map; // 内存块的映射位图
+};
+
+struct Slab_cache
+{
+    uint64_t size;           // 内存池中内存块的大小
+    uint64_t total_using;    // 已使用的内存块
+    uint64_t total_free;     // 可使用的内存块
+    struct Slab *cache_pool; // 指向Slab块的指针
+    struct Slab *cache_dma_pool;
+    void *(*constructor)(void *Vaddress, uint64_t arg);
+    void *(*destructor)(void *Vaddress, uint64_t arg);
+};
+
 void init_memory();
 struct Page *alloc_pages(int zone_select, int number, uint64_t page_flags);
 void free_pages(struct Page *page, int number);
+uint64_t init_memory_slab();
+void *kmalloc(uint64_t size, uint64_t gfp_flages);
+uint64_t kfree(void *address);

@@ -3,8 +3,39 @@
 #include "include/debug.h"
 #include "include/print_kernel.h"
 #include "include/bitmap.h"
+#include "include/list.h"
+
+typedef struct
+{
+    uint64_t pml4t;
+} pml4t_t;
+#define mk_mpl4t(addr, attr) ((uint64_t)(addr) | (uint64_t)(attr))
+#define set_mpl4t(mpl4tptr, mpl4tval) (*(mpl4tptr) = (mpl4tval))
+
+typedef struct
+{
+    uint64_t pdpt;
+} pdpt_t;
+#define mk_pdpt(addr, attr) ((uint64_t)(addr) | (uint64_t)(attr))
+#define set_pdpt(pdptptr, pdptval) (*(pdptptr) = (pdptval))
+
+typedef struct
+{
+    uint64_t pdt;
+} pdt_t;
+#define mk_pdt(addr, attr) ((uint64_t)(addr) | (uint64_t)(attr))
+#define set_pdt(pdtptr, pdtval) (*(pdtptr) = (pdtval))
+
+typedef struct
+{
+    uint64_t pt;
+} pt_t;
+#define mk_pt(addr, attr) ((uint64_t)(addr) | (uint64_t)(attr))
+#define set_pt(ptptr, ptval) (*(ptptr) = (ptval))
 
 #define NULL (void *)0
+
+struct Slab *kmalloc_create_slab(uint64_t size);
 
 extern char _text;
 extern char _etext;
@@ -18,6 +49,26 @@ int ZONE_NORMAL_INDEX = 0;  // low 1GB RAM ,was mapped in pagetable
 int ZONE_UNMAPED_INDEX = 0; // above 1GB RAM,unmapped in pagetable
 
 uint64_t *Global_CR3 = NULL;
+
+struct Slab_cache kmalloc_cache_size[16] =
+    {
+        {32, 0, 0, NULL, NULL, NULL, NULL},
+        {64, 0, 0, NULL, NULL, NULL, NULL},
+        {128, 0, 0, NULL, NULL, NULL, NULL},
+        {256, 0, 0, NULL, NULL, NULL, NULL},
+        {512, 0, 0, NULL, NULL, NULL, NULL},
+        {1024, 0, 0, NULL, NULL, NULL, NULL}, // 1KB
+        {2048, 0, 0, NULL, NULL, NULL, NULL},
+        {4096, 0, 0, NULL, NULL, NULL, NULL}, // 4KB
+        {8192, 0, 0, NULL, NULL, NULL, NULL},
+        {16384, 0, 0, NULL, NULL, NULL, NULL},
+        {32768, 0, 0, NULL, NULL, NULL, NULL},
+        {65536, 0, 0, NULL, NULL, NULL, NULL},  // 64KB
+        {131072, 0, 0, NULL, NULL, NULL, NULL}, // 128KB
+        {262144, 0, 0, NULL, NULL, NULL, NULL},
+        {524288, 0, 0, NULL, NULL, NULL, NULL},
+        {1048576, 0, 0, NULL, NULL, NULL, NULL}, // 1MB
+};
 
 uint64_t page_init(struct Page *page, uint64_t flags)
 {
@@ -379,3 +430,350 @@ void free_pages(struct Page *page, int number)
         page->attribute = 0;
     }
 }
+
+//------------------------------------------------------------------------------------------------------
+//--------------------以下几个函数是实现内存描述符初始化函数init_memory_slab的辅助函数-----------------------
+//------------------------------------------------------------------------------------------------------
+
+// 初始化slab_cache
+static void init_slab_cache(struct Slab_cache *slab_cache, uint64_t block_size)
+{
+    // 把Slab_cache指向的Slab放在内存管理单元的末尾
+    slab_cache->cache_pool = (struct Slab *)memory_management_struct.end_of_struct;
+
+    // 更新内存管理单元的末尾
+    memory_management_struct.end_of_struct = memory_management_struct.end_of_struct + sizeof(struct Slab) + sizeof(long) * 10;
+    // ------------------------初始化slab------------------
+    list_init(&(slab_cache->cache_pool->list));
+
+    slab_cache->cache_pool->using_count = 0;
+    slab_cache->cache_pool->free_count = PAGE_2M_SIZE / block_size;
+    // 位图占用的字节数，向上取整8字节对齐
+    slab_cache->cache_pool->color_length = (((PAGE_2M_SIZE / block_size) + 63) >> 6) << 3;
+    slab_cache->cache_pool->color_count = PAGE_2M_SIZE / block_size;
+    // 位图的放置位置
+    slab_cache->cache_pool->color_map = (uint64_t *)memory_management_struct.end_of_struct;
+    
+    // 更新位图管理单元的结束位置，进行8字节对齐
+    memory_management_struct.end_of_struct = (uint64_t)(memory_management_struct.end_of_struct + slab_cache->cache_pool->color_length + sizeof(long) * 10) & (~(sizeof(long) - 1));
+        // 将位图中的位全部置1
+        memset(slab_cache->cache_pool->color_map, 0xFF, slab_cache->cache_pool->color_length);
+    // 将可用的内存块对应的位设为0
+    // 这段代码有问题
+    for (int i = 0; i < slab_cache->cache_pool->color_count; i++)
+    {
+        *(slab_cache->cache_pool->color_map + (i >> 6)) ^= 1UL << (i % 64);
+    }
+
+    slab_cache->total_free = slab_cache->cache_pool->free_count;
+    slab_cache->total_using = 0;
+}
+
+// 标记使用过的物理页
+static void mark_used_physical_pages(uint64_t start, uint64_t end, unsigned flags)
+{
+    uint64_t start_page = start >> PAGE_2M_SHIFT;
+    uint64_t end_page = end >> PAGE_2M_SHIFT;
+
+    for (uint64_t i = start_page; i <= end_page; ++i)
+    {
+        struct Page *page = &memory_management_struct.pages_struct[i];
+        uint64_t *bits = memory_management_struct.bits_map + (i >> 6);
+        // i & 63 相当于 i % 64
+        *bits |= 1UL << (i & 63);
+
+        page->zone_struct->page_using_count++;
+        page->zone_struct->page_free_count--;
+        page_init(page, flags);
+    }
+}
+
+// 初始化内存块管理单元
+uint64_t init_memory_slab()
+{
+    uint64_t start_address = memory_management_struct.end_of_struct;
+
+    // 批量初始化Slab_cache
+    for (int i = 0; i < 16; i++)
+    {
+        init_slab_cache(&kmalloc_cache_size[i], kmalloc_cache_size[i].size);
+    }
+    // ---------------------接下来对于所有slab占用的物理页进行置位标记------------------
+    uint64_t end_address = Virt_To_Phy(memory_management_struct.end_of_struct);
+    // start_address所在的物理页一定被标记过了，所以将start_address的地址向上取整2MB
+    mark_used_physical_pages(PAGE_2M_UP_ALIGN(start_address), end_address, PG_PTable_Maped | PG_Kernel_Init | PG_Kernel);
+    // --------------------------为slab分配内存页-------------------
+    for (int i = 0; i < 16; i++)
+    {
+        uint64_t *virtual = (uint64_t *)((memory_management_struct.end_of_struct + PAGE_2M_SIZE * i + PAGE_2M_SIZE - 1) & PAGE_2M_MASK);
+        struct Page *page = Virt_To_2M_Page(virtual);
+
+        *(memory_management_struct.bits_map + ((page->PHY_address >> PAGE_2M_SHIFT) >> 6)) |= 1UL << (page->PHY_address >> PAGE_2M_SHIFT) % 64;
+        page->zone_struct->page_using_count++;
+        page->zone_struct->page_free_count--;
+
+        page_init(page, PG_PTable_Maped | PG_Kernel_Init | PG_Kernel);
+
+        kmalloc_cache_size[i].cache_pool->page = page;
+        kmalloc_cache_size[i].cache_pool->Vaddress = virtual;
+
+    }
+
+    return 1;
+}
+
+//------------------------------------------------------------------------------------------------------
+//--------------------------------------init_memory_slab实现完毕----------------------------------------
+//------------------------------------------------------------------------------------------------------
+
+
+
+
+//------------------------------------------------------------------------------------------------------
+//-----------------------------------以下函数用于辅助实现内存块的回收和释放---------------------------------
+//------------------------------------------------------------------------------------------------------
+
+// 从Slab_cache中查找一个可用的slab
+static struct Slab *find_available_slab(struct Slab_cache *cache)
+{
+    printf("find_available_slab\n");
+    struct Slab *slab = cache->cache_pool;
+    printf("struct Slab *slab = cache->cache_pool;  0x%x\n", slab);
+    printf("slab->free_count %d\n", slab->free_count);
+    do
+    {
+        printf("find_available_slab list next\n");
+        if (slab->free_count == 0)
+        {
+            printf("slab->free_count == 0\n");
+            slab = container_of(list_next(&slab->list), struct Slab, list);
+        }
+        else
+        {
+            printf("return slab\n");
+            return slab;
+        }
+    } while (slab != cache->cache_pool);
+    printf("find_available_slab end\n\n");
+    return NULL;
+}
+
+static void *allocate_from_slab(struct Slab *slab, struct Slab_cache *cache)
+{
+    uint64_t idx = bitmap_scan(slab->color_map, slab->color_length, 1);
+    if (idx == -1)
+        return NULL;
+
+    bitmap_set(slab->color_map, idx, 1);
+    slab->using_count++;
+    slab->free_count--;
+    cache->total_free--;
+    cache->total_using++;
+
+    return (void *)((char *)slab->Vaddress + (cache->size * idx));
+}
+
+void *kmalloc(uint64_t size, uint64_t gfp_flages)
+{
+    printf("kmalloc\n");
+    int i, j;
+    struct Slab_cache *slab_cache = NULL;
+    if (size > 1048576)
+    {
+        return NULL;
+    }
+    // 找到有对应大小的内存池
+    for (i = 0; i < 16; i++)
+        if (kmalloc_cache_size[i].size >= size)
+            break;
+    slab_cache = &kmalloc_cache_size[i];
+
+    struct Slab *slab = find_available_slab(slab_cache);
+    if (slab == NULL)
+    {
+        slab = kmalloc_create_slab(kmalloc_cache_size[i].size);
+        if (slab == NULL)
+        {
+            return NULL;
+        }
+        slab_cache->total_free += slab->color_count;
+        list_insert_before(&(slab_cache->cache_pool->list), &(slab->list));
+    }
+    return allocate_from_slab(slab, slab_cache);
+}
+
+// 小对象：在物理页内就地创建slab
+static struct Slab *create_slab_in_page(uint64_t size)
+{
+    struct Page *page = alloc_pages(ZONE_NORMAL, 1, PG_Kernel);
+    if (page == NULL)
+    {
+        printf("create_slab_in_page()->alloc_pages()=>page == NULL\n");
+        return NULL;
+    }
+    void *vaddr = Phy_To_Virt(page->PHY_address);
+    uint64_t bitmap_length = PAGE_2M_SIZE / size / 8;
+
+    // 计算Slab和位图需要占据的空间大小，按8字节对齐
+    uint64_t total_size = (sizeof(struct Slab) + bitmap_length + 8) & (~(sizeof(long) - 1));
+
+    // 从物理页顶部分配空间
+    struct Slab *slab = (struct Slab *)((char *)vaddr + PAGE_2M_SIZE - total_size);
+    // 位图放置在slab后面
+    slab->color_map = (uint64_t *)(slab + 1);
+    // 位图长度向上取整8字节对齐
+    slab->color_length = (bitmap_length + 8) & (~(sizeof(long) - 1));
+    // 物理页中还可以使用的内存块数量
+    slab->free_count = (PAGE_2M_SIZE - total_size) / size;
+    slab->using_count = 0;
+    slab->color_count = slab->free_count;
+    slab->Vaddress = vaddr;
+    slab->page = page;
+    list_init(&slab->list);
+    memset(slab->color_map, 0xff, slab->color_length);
+    for (int i = 0; i < slab->color_count; i++)
+        *(slab->color_map + (i >> 6)) ^= 1UL << i % 64;
+    return slab;
+}
+
+static struct Slab *create_slab_out_of_page(uint64_t size)
+{
+    struct Page *page = alloc_pages(ZONE_NORMAL, 1, PG_Kernel);
+    if (page == NULL)
+    {
+        printf("create_slab_out_of_page()->alloc_pages()=>page == NULL\n");
+        return NULL;
+    }
+    struct Slab *slab = kmalloc(sizeof(struct Slab), 0);
+    if (!slab)
+    {
+        return NULL;
+    }
+
+    slab->free_count = PAGE_2M_SIZE / size;
+    slab->using_count = 0;
+    slab->color_count = slab->free_count;
+    // 位图长度向上取整8字节对齐
+    slab->color_length = ((PAGE_2M_SIZE / size / 8) + 8) & (~(sizeof(long) - 1));
+    slab->color_map = kmalloc(slab->color_length, 0);
+    if (!slab->color_map)
+    {
+        kfree(slab);
+        return NULL;
+    }
+
+    memset(slab->color_map, 0xff, slab->color_length);
+
+    slab->Vaddress = Phy_To_Virt(page->PHY_address);
+    slab->page = page;
+    list_init(&slab->list);
+
+    for (int i = 0; i < slab->color_count; i++)
+        *(slab->color_map + (i >> 6)) ^= 1UL << i % 64;
+    return slab;
+}
+
+// 对于512字节及以下的内存块，直接在申请的物理页面中放置Slab结构体及其位图
+// 对于1024字节及以上的内存块，申请一个内存块来放置Slab结构体以及申请一个内存块来放置位图
+struct Slab *kmalloc_create_slab(uint64_t size)
+{
+    struct Slab *slab = NULL;
+    switch (size)
+    {
+    case 32:
+    case 64:
+    case 128:
+    case 256:
+    case 512:
+        return create_slab_in_page(size);
+
+    case 1024: // 1KB
+    case 2048:
+    case 4096: // 4KB
+    case 8192:
+    case 16384:
+    case 32768:
+    case 65536:
+    case 131072: // 128KB
+    case 262144:
+    case 524288:
+    case 1048576: // 1MB
+        return create_slab_out_of_page(size);
+    default:
+        printf("kmalloc_create() ERROR: wrong size:%08d\n", size);
+    }
+
+    return NULL;
+}
+
+// 遍历每个Slab_cache,对于每个Slab_cache中的slab进行遍历，查看是否含有要释放的地址对应的内存块
+// 这个函数的效率是比较偏低的，如果要提高效率，那么只能重新设计一下slba的算法，比如将slab结构体放在页开头
+// 这样只要能找到内存块对应的物理页，就能快速找到相应的slab结构，能实现对内存块的快速回收
+// 后续再进行优化吧
+uint64_t kfree(void *address)
+{
+    int i;
+    int index;
+    struct Slab *slab = NULL;
+    void *page_base_address = (void *)((uint64_t)address & PAGE_2M_MASK);
+
+    for (i = 0; i < 16; i++)
+    {
+        slab = kmalloc_cache_size[i].cache_pool;
+        do
+        {
+            if (slab->Vaddress == page_base_address)
+            {
+                index = (address - slab->Vaddress) / kmalloc_cache_size[i].size;
+
+                *(slab->color_map + (index >> 6)) ^= 1UL << index % 64;
+
+                slab->free_count++;
+                slab->using_count--;
+
+                kmalloc_cache_size[i].total_free++;
+                kmalloc_cache_size[i].total_using--;
+
+                if ((slab->using_count == 0) && (kmalloc_cache_size[i].total_free >= slab->color_count * 3 / 2) && (kmalloc_cache_size[i].cache_pool != slab))
+                {
+                    switch (kmalloc_cache_size[i].size)
+                    {
+                    case 32:
+                    case 64:
+                    case 128:
+                    case 256:
+                    case 512:
+                        list_delete(&slab->list);
+                        kmalloc_cache_size[i].total_free -= slab->color_count;
+
+                        page_clean(slab->page);
+                        free_pages(slab->page, 1);
+                        break;
+
+                    default:
+                        list_delete(&slab->list);
+                        kmalloc_cache_size[i].total_free -= slab->color_count;
+
+                        kfree(slab->color_map);
+
+                        page_clean(slab->page);
+                        free_pages(slab->page, 1);
+                        kfree(slab);
+                        break;
+                    }
+                }
+
+                return 1;
+            }
+            else
+                slab = container_of(list_next(&slab->list), struct Slab, list);
+
+        } while (slab != kmalloc_cache_size[i].cache_pool);
+    }
+
+    printf("kfree() ERROR: can`t free memory\n");
+
+    return 0;
+}
+
+

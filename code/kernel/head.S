@@ -84,21 +84,41 @@ __PDPTE:
 __PDE:						//页中级目录的地址设置到0x103000处
 
 // 将物理地址0开始的10MB内存映射到线性地址0x00和0xffff800000000000处
+
 	.quad	0x000083	
 	.quad	0x200083
 	.quad	0x400083
 	.quad	0x600083
-	.quad	0x800083
-// 将物理地址0xe0000000开始的16MB内存映射到物理线性地址0xa00000处和0xffff800000a00000处
-	.quad	0xe0000083		/*0x a00000*/
+	.quad	0x800083		/* 0x800083 */
+	.quad	0xa00083
+	.quad	0xc00083
+	.quad	0xe00083
+	.quad	0x1000083
+	.quad	0x1200083
+	.quad	0x1400083
+	.quad	0x1600083
+	.quad	0x1800083
+	.quad	0x1a00083
+	.quad	0x1c00083
+	.quad	0x1e00083
+	.quad	0x2000083
+	.quad	0x2200083
+	.quad	0x2400083
+	.quad	0x2600083
+	.quad	0x2800083
+	.quad	0x2a00083
+	.quad	0x2c00083
+	.quad	0x2e00083
+
+	.quad	0xe0000083		/*0x 3000000*/
 	.quad	0xe0200083
 	.quad	0xe0400083
 	.quad	0xe0600083
-	.quad	0xe0800083		/*0x1000000*/
+	.quad	0xe0800083
 	.quad	0xe0a00083
 	.quad	0xe0c00083
 	.quad	0xe0e00083
-	.fill	499,8,0
+	.fill	480,8,0
 
 //=======	GDT_Table
 
