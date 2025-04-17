@@ -232,3 +232,8 @@ void free_pages(struct Page *page, int number);
 uint64_t init_memory_slab();
 void *kmalloc(uint64_t size, uint64_t gfp_flages);
 uint64_t kfree(void *address);
+void pagetable_init();
+
+
+
+

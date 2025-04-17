@@ -777,3 +777,69 @@ uint64_t kfree(void *address)
 }
 
 
+
+
+
+// 下面这个函数主要是将未映射过的物理内存页进行映射，但是ZONE_UNMAPED_INDEX代表的内存区域及其之后的内存区域都不映射
+// 映射规则主要是第n个物理内存页对应第n个虚拟页，也就是说物理地址和虚拟地址是相同的，映射规则是V=P，访问线性地址0x1000等价于访问物理地址0x1000
+// 如果我们要实现把这些物理内存页映射到内核空间，那么只需要让内核的页全局级目录项（一项代表512G）指向对应的页全局目录就达到了将这些物理内存映射到内核空间的目的
+// 很显然，我们在内核执行头中已经设置了内核的页全局目录项，因此也就达到了将这些物理内存映射到内核空间的目的
+void pagetable_init()
+{
+    uint64_t i, j;
+    uint64_t *tmp = NULL;
+
+    Global_CR3 = get_gdt();
+
+    // tmp指向页全局目录中的内核的页表项，该页表项保存内核的页上级目录地址
+    tmp = (uint64_t *)(((uint64_t)Phy_To_Virt((uint64_t)Global_CR3 & (~0xfffUL))) + 8 * 256);
+
+    //printf("1:%x\t\t\n", (uint64_t)tmp, *tmp);
+
+    // 获取第1个页上级目录的基地址
+    tmp = Phy_To_Virt(*tmp & (~0xfffUL));
+
+    //printf("2:%x\t\t\n", (uint64_t)tmp, *tmp);
+
+    // 获取第1个页中级目录的基地址
+    tmp = Phy_To_Virt(*tmp & (~0xfffUL));
+
+    //printf("3:%x\t\t\n", (uint64_t)tmp, *tmp);
+
+    for (i = 0; i < memory_management_struct.zones_size; i++)
+    {
+        struct Zone *z = memory_management_struct.zones_struct + i;
+        struct Page *p = z->pages_group;
+
+        if (ZONE_UNMAPED_INDEX && i == ZONE_UNMAPED_INDEX)
+            break;
+
+        for (j = 0; j < z->pages_length; j++, p++);
+        {
+            // tmp指向页全局目录中的表项，表项和物理页的物理基地址有关，看起来物理页和线性地址页是进行相等映射的，比如第1个物理页映射出来第1个线性页
+            // 最后让内核的页全局表项指向低1GB物理内存映射对应的页上级目录，这样就达成了低1GB物理内存被映射到内核起始处
+            tmp = (uint64_t *)(((uint64_t)Phy_To_Virt((uint64_t)Global_CR3 & (~0xfffUL))) + (((uint64_t)Phy_To_Virt(p->PHY_address) >> PAGE_GDT_SHIFT) & 0x1ff) * 8);
+
+            // *tmp页全局目录表项保存页上级目录的线性地址，该项为空时表示不存在页上级目录，需要申请4KB空间作为页上级目录
+            if (*tmp == 0)
+            {
+                uint64_t *virtual = kmalloc(PAGE_4K_SIZE, 0);
+                set_mpl4t(tmp, mk_mpl4t(Virt_To_Phy(virtual), PAGE_KERNEL_GDT));
+            }
+            // tmp指向物理页对应的页上级目录的表项
+            tmp = (uint64_t *)((uint64_t)Phy_To_Virt(*tmp & (~0xfffUL)) + (((uint64_t)Phy_To_Virt(p->PHY_address) >> PAGE_1G_SHIFT) & 0x1ff) * 8);
+
+            // *tmp保存着页中级目录的地址，如果页中级目录不存在，则申请4KB页创建页中级目录
+            if (*tmp == 0)
+            {
+                uint64_t *virtual = kmalloc(PAGE_4K_SIZE, 0);
+                set_pdpt(tmp, mk_pdpt(Virt_To_Phy(virtual), PAGE_KERNEL_Dir));
+            }
+            // tmp指向页中级目录中对应2MB物理页的表项
+            tmp = (uint64_t *)((uint64_t)Phy_To_Virt(*tmp & (~0xfffUL)) + (((uint64_t)Phy_To_Virt(p->PHY_address) >> PAGE_2M_SHIFT) & 0x1ff) * 8);
+            // 让页中级目录中的表项指向对应的物理页
+            set_pdt(tmp, mk_pdt(p->PHY_address, PAGE_KERNEL_Page));
+        }
+    }
+    flush_tlb();
+}
