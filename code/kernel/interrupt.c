@@ -1,6 +1,7 @@
 #include "include/stdint.h"
 #include "include/interrupt.h"
 #include "include/print_kernel.h"
+#include "include/io.h"
 
 #define PIC_M_CTRL 0x20 // 这里用的可编程中断控制器是8259A,主片的控制端口是0x20
 #define PIC_M_DATA 0x21 // 主片的数据端口是0x21
@@ -26,8 +27,6 @@ extern intr_handler intr_entry_table[IDT_DESC_CNT]; // 声明引用定义在kern
 extern struct gate_desc IDT_Table[256];
 
 intr_handler idt_func_table[256];
-
-
 
 //////////////////////////////////////////////////////////////////////////////
 //                    下面是中断向量的处理函数
@@ -200,7 +199,7 @@ void do_virtualization_exception(uint64_t rsp, uint64_t error_code)
 // 通用的中断处理函数,一般用在异常出现时的处理
 static void general_intr_handler(uint64_t rsp, uint64_t error_code)
 {
-    // 后面再具体设计通用中断处理函数吧
+    // 后面再具体设计中断处理函数的形式吧
     printf("interrupt to do\n");
     while (1)
         ;
@@ -210,15 +209,23 @@ static void general_intr_handler(uint64_t rsp, uint64_t error_code)
 
 // 33号中断设置为键盘
 
+// 键盘使用的是8042芯片，它的数据端口是0x60，数据长度是8位
+// 必须要将数据端口中的数据读取完毕之后才能触发下次键盘中断
+// 0x64端口是状态寄存器和控制寄存器,因此该端口可读可写，读和写该端口的含义不一样
+void do_keyboard(uint64_t rsp, uint64_t error_code)
+{
+    // 读取键盘扫描码
+    uint8_t scancode = inb(0x60);
 
+    // 发送EOI到8259A主芯片
+    outb(0x20, 0x20);
 
+    printf("Keyboard scancode: 0x%x\n", scancode);
+}
 
 ////////////////////////////////////////////////////////////////
-//               以上是中断向量的处理函数 
+//               以上是中断向量的处理函数
 ////////////////////////////////////////////////////////////////
-
-
-
 
 // 创建中断门描述符
 static void make_idt_desc(struct gate_desc *p_gdesc, uint8_t ist, uint8_t attr, intr_handler function)
@@ -272,8 +279,9 @@ static void idt_func_table_init()
     idt_func_table[18] = do_machine_check;
     idt_func_table[19] = do_SIMD_exception;
     idt_func_table[20] = do_virtualization_exception;
+    // 21-31号中断是intel保留未使用的
+    idt_func_table[33] = do_keyboard;
 }
-
 
 // 完成有关中断的所有初始化工作
 void idt_init()
