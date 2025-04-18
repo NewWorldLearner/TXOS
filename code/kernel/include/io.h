@@ -36,7 +36,7 @@ static inline uint32_t inl(uint16_t port)
 // 向端口port写入4字节的data
 static inline void outl(uint16_t port, uint32_t data)
 {
-    asm __volatile__("outl %%dx, %0 \n\t"
+    asm __volatile__("outl %0, %%dx \n\t"
                      "mfence \n\t"
                      :
                      : "a"(data), "d"(port)

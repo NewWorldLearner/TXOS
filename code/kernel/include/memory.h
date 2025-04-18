@@ -226,6 +226,34 @@ struct Slab_cache
     void *(*destructor)(void *Vaddress, uint64_t arg);
 };
 
+typedef struct
+{
+    uint64_t pml4t;
+} pml4t_t;
+#define mk_mpl4t(addr, attr) ((uint64_t)(addr) | (uint64_t)(attr))
+#define set_mpl4t(mpl4tptr, mpl4tval) (*(mpl4tptr) = (mpl4tval))
+
+typedef struct
+{
+    uint64_t pdpt;
+} pdpt_t;
+#define mk_pdpt(addr, attr) ((uint64_t)(addr) | (uint64_t)(attr))
+#define set_pdpt(pdptptr, pdptval) (*(pdptptr) = (pdptval))
+
+typedef struct
+{
+    uint64_t pdt;
+} pdt_t;
+#define mk_pdt(addr, attr) ((uint64_t)(addr) | (uint64_t)(attr))
+#define set_pdt(pdtptr, pdtval) (*(pdtptr) = (pdtval))
+
+typedef struct
+{
+    uint64_t pt;
+} pt_t;
+#define mk_pt(addr, attr) ((uint64_t)(addr) | (uint64_t)(attr))
+#define set_pt(ptptr, ptval) (*(ptptr) = (ptval))
+
 void init_memory();
 struct Page *alloc_pages(int zone_select, int number, uint64_t page_flags);
 void free_pages(struct Page *page, int number);

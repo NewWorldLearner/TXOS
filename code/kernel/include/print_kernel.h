@@ -40,6 +40,4 @@ int color_print_string(unsigned int FRcolor, unsigned int BKcolor, const char *s
 
 int printf(char *format, ...);
 
-int print_str(const char *str);
-
 #endif

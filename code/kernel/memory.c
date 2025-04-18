@@ -5,34 +5,6 @@
 #include "include/bitmap.h"
 #include "include/list.h"
 
-typedef struct
-{
-    uint64_t pml4t;
-} pml4t_t;
-#define mk_mpl4t(addr, attr) ((uint64_t)(addr) | (uint64_t)(attr))
-#define set_mpl4t(mpl4tptr, mpl4tval) (*(mpl4tptr) = (mpl4tval))
-
-typedef struct
-{
-    uint64_t pdpt;
-} pdpt_t;
-#define mk_pdpt(addr, attr) ((uint64_t)(addr) | (uint64_t)(attr))
-#define set_pdpt(pdptptr, pdptval) (*(pdptptr) = (pdptval))
-
-typedef struct
-{
-    uint64_t pdt;
-} pdt_t;
-#define mk_pdt(addr, attr) ((uint64_t)(addr) | (uint64_t)(attr))
-#define set_pdt(pdtptr, pdtval) (*(pdtptr) = (pdtval))
-
-typedef struct
-{
-    uint64_t pt;
-} pt_t;
-#define mk_pt(addr, attr) ((uint64_t)(addr) | (uint64_t)(attr))
-#define set_pt(ptptr, ptval) (*(ptptr) = (ptval))
-
 #define NULL (void *)0
 
 struct Slab *kmalloc_create_slab(uint64_t size);
@@ -773,9 +745,10 @@ uint64_t kfree(void *address)
 
 
 // 下面这个函数主要是将未映射过的物理内存页进行映射，但是ZONE_UNMAPED_INDEX代表的内存区域及其之后的内存区域都不映射
-// 映射规则主要是第n个物理内存页对应第n个虚拟页，也就是说物理地址和虚拟地址是相同的，映射规则是V=P，访问线性地址0x1000等价于访问物理地址0x1000
-// 如果我们要实现把这些物理内存页映射到内核空间，那么只需要让内核的页全局级目录项（一项代表512G）指向对应的页全局目录就达到了将这些物理内存映射到内核空间的目的
-// 很显然，我们在内核执行头中已经设置了内核的页全局目录项，因此也就达到了将这些物理内存映射到内核空间的目的
+// 回想一下，线性地址转换到物理地址的过程，先是取线性地址的高9位并乘以8，得到在页全局目录中的偏移量（页全局目录项保存页上级目录的物理地址），进而可求得页上级目录的物理地址……
+// 一直到从页表中获取到线性地址对应的物理页，然后在加上页中偏移量，就可以获得一个线性地址对应的物理地址
+// 那么，将物理页映射为虚拟页的过程也就类似了，先将物理地址转换为虚拟地址，然后取虚拟地址的高9位并乘以8，得到页全局目录的偏移量（页上级目录的物理地址）
+// 如果该页目录项为空，那么申请4KB的内存作为页上级目录，并将页上级目录的地址保存到页全局目录项中……
 void pagetable_init()
 {
     uint64_t i, j;
@@ -808,8 +781,7 @@ void pagetable_init()
 
         for (j = 0; j < z->pages_length; j++, p++);
         {
-            // tmp指向页全局目录中的表项，表项和物理页的物理基地址有关，看起来物理页和线性地址页是进行相等映射的，比如第1个物理页映射出来第1个线性页
-            // 最后让内核的页全局表项指向低1GB物理内存映射对应的页上级目录，这样就达成了低1GB物理内存被映射到内核起始处
+            // tmp指向页全局目录中的表项，表项和物理页的物理基地址有关
             tmp = (uint64_t *)(((uint64_t)Phy_To_Virt((uint64_t)Global_CR3 & (~0xfffUL))) + (((uint64_t)Phy_To_Virt(p->PHY_address) >> PAGE_GDT_SHIFT) & 0x1ff) * 8);
 
             // *tmp页全局目录表项保存页上级目录的线性地址，该项为空时表示不存在页上级目录，需要申请4KB空间作为页上级目录

@@ -20,9 +20,9 @@ void Start_Kernel(void)
 	pagetable_init();
 
 	#if APIC
-		Local_APIC_init();
+		LAPIC_IOAPIC_init();
 	#else
-		//pic_8259A_init();
+		pic_8259A_init();
 	#endif
 
 	while (1)
