@@ -21,4 +21,10 @@ typedef void* intr_handler;
 
 void idt_init();
 
+inline static void sti()
+{
+    // cc 表示EFLAGS寄存器被修改
+    asm volatile ("sti \n\t": : : "cc");
+}
+
 #endif

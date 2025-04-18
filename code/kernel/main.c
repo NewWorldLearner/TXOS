@@ -3,7 +3,11 @@
 #include "include/debug.h"
 #include "include/memory.h"
 
-#include "include/8259A.h"
+#if APIC
+	#include "include/APIC.h"
+#else
+	#include "include/8259A.h"
+#endif
 
 extern struct Global_Memory_Descriptor memory_management_struct;
 
@@ -14,7 +18,12 @@ void Start_Kernel(void)
 	idt_init();
 	init_memory_slab();
 	pagetable_init();
-	pic_8259A_init();
+
+	#if APIC
+		Local_APIC_init();
+	#else
+		//pic_8259A_init();
+	#endif
 
 	while (1)
 		;

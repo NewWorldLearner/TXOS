@@ -1,5 +1,8 @@
 CFLAGS := -mcmodel=large -fno-builtin -m64 -std=gnu99
 
+PIC := APIC
+
+
 all: system
 	objcopy -I elf64-x86-64 -S -R ".eh_frame" -R ".comment" -O binary system kernel.bin
 
@@ -9,7 +12,7 @@ system:	head.o main.o print_kernel.o interrupt.o interrupt_entry.o string.o debu
 	-T kernel.lds 
 
 main.o:	main.c
-	gcc $(CFLAGS) -c main.c
+	gcc $(CFLAGS) -c main.c -D$(PIC)
 
 interrupt.o: interrupt.c
 	gcc $(CFLAGS) -c interrupt.c
@@ -31,8 +34,14 @@ bitmap.o: lib/bitmap.c
 list.o: lib/list.c
 	gcc $(CFLAGS) -c lib/list.c
 
+ifeq ($(PIC),APIC)
+pic.o: APIC.c
+	gcc  $(CFLAGS) -c APIC.c -o pic.o
+else
 pic.o: 8259A.c
 	gcc $(CFLAGS) -c 8259A.c -o pic.o
+endif
+
 
 memory.o: memory.c
 	gcc $(CFLAGS) -c memory.c
