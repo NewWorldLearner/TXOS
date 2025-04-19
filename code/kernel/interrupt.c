@@ -32,12 +32,13 @@ intr_handler idt_func_table[256];
 // 24个外部中断
 irq_desc_T interrupt_desc[24] = {0};
 
+
 //////////////////////////////////////////////////////////////////////////////
 //                    下面是中断向量的处理函数
 /////////////////////////////////////////////////////////////////////////////
 
-// 0
-void do_div_zero_error(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
+    // 0
+    void do_div_zero_error(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 {
     printf("div zero error\n");
     while (1)
@@ -302,7 +303,6 @@ static void idt_func_table_init()
     // 32-55作为外部中断，中断处理函数统一为do_IRQ，然后在该函数中根据中断向量号来调用具体的中断处理函数
     for (int i = 32; i <56; i++)
     {
-        // todo 外部中断控制结构体的初始化
         idt_func_table[i] = do_IRQ;
     }
 }

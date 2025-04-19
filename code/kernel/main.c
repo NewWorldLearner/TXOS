@@ -2,6 +2,7 @@
 #include "include/interrupt.h"
 #include "include/debug.h"
 #include "include/memory.h"
+#include "include/keyboard.h"
 
 #if APIC
 	#include "include/APIC.h"
@@ -24,6 +25,8 @@ void Start_Kernel(void)
 	#else
 		pic_8259A_init();
 	#endif
+
+	keyboard_init();
 
 	while (1)
 		;
