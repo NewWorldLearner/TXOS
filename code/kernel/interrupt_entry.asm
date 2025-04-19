@@ -41,14 +41,9 @@ intr%1entry:		 ; 每个中断处理程序都要压入中断向量号,所以一�
     mov ax, ds
     push rax
 
-   ; 如果是从片上进入的中断,除了往从片上发送EOI外,还要往主片上发送EOI 
-   ;mov al,0x20                   ; 中断结束命令EOI
-   ;out 0xa0,al                   ; 向从片发送
-   ;out 0x20,al                   ; 向主片发送
-
-   mov rdi, [rsp + 18 * 8];       ;将rsp的值传递给中断处理函数，中断处理函数通过[rsp+ 18 * 8]就可以知道发生中断时压入的rip地址了，因此就可以修改该值
-   mov rsi, [rsp + 17 *8];        ;将压入的错误码传参给中断处理函数
-   mov rdx, %1;                   ;%1是一个宏，表示的是中断向量号，这里将中断向量号传参给中断处理函数
+   mov rdi, rsp;                  ;将rsp的值传递给中断处理函数，中断处理函数通过[rsp+ 18 * 8]就可以知道发生中断时压入的rip地址了，因此就可以修改该值
+   mov rsi, %1;                   ;%1是一个宏，表示的是中断向量号，将中断向量号传递给中断处理函数
+   mov rdx, [rsp + 17 *8];        ;将压入的错误码传参给中断处理函数
    lea rax, [rel idt_func_table]  ;这里不使用call [idt_func_table + %1*8]来直接调用，原因似乎是nasm会使用32位地址来访问idt_func_table，导致错误
    call [rax + %1*8]              ;调用idt_func_table中的C版本中断处理函数，注意偏移量要乘以8
 
@@ -123,6 +118,7 @@ VECTOR 0x1c,ZERO
 VECTOR 0x1d,ERROR_CODE
 VECTOR 0x1e,ERROR_CODE
 VECTOR 0x1f,ZERO 
+;下面的是外部中断，共24个外部中断
 VECTOR 0x20,ZERO	;时钟中断对应的入口
 VECTOR 0x21,ZERO	;键盘中断对应的入口
 VECTOR 0x22,ZERO	;级联用的
@@ -139,3 +135,12 @@ VECTOR 0x2c,ZERO	;ps/2鼠标
 VECTOR 0x2d,ZERO	;fpu浮点单元异常
 VECTOR 0x2e,ZERO	;硬盘
 VECTOR 0x2f,ZERO	;保留
+VECTOR 0x30,ZERO	;保留
+VECTOR 0x31,ZERO	;保留
+VECTOR 0x32,ZERO	;保留
+VECTOR 0x33,ZERO	;保留
+VECTOR 0x34,ZERO	;保留
+VECTOR 0x35,ZERO	;保留
+VECTOR 0x36,ZERO	;保留
+VECTOR 0x37,ZERO	;保留
+

@@ -1,14 +1,15 @@
-#include "include/stdint.h"
 #include "include/interrupt.h"
 #include "include/print_kernel.h"
 #include "include/io.h"
+
+#define NULL (void*)0
 
 #define PIC_M_CTRL 0x20 // 这里用的可编程中断控制器是8259A,主片的控制端口是0x20
 #define PIC_M_DATA 0x21 // 主片的数据端口是0x21
 #define PIC_S_CTRL 0xa0 // 从片的控制端口是0xa0
 #define PIC_S_DATA 0xa1 // 从片的数据端口是0xa1
 
-#define IDT_DESC_CNT 48
+#define IDT_DESC_CNT 56
 
 // 128位中断门描述符结构体
 struct gate_desc
@@ -28,12 +29,15 @@ extern struct gate_desc IDT_Table[256];
 
 intr_handler idt_func_table[256];
 
+// 24个外部中断
+irq_desc_T interrupt_desc[24] = {0};
+
 //////////////////////////////////////////////////////////////////////////////
 //                    下面是中断向量的处理函数
 /////////////////////////////////////////////////////////////////////////////
 
 // 0
-void do_div_zero_error(uint8_t vec_no)
+void do_div_zero_error(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 {
     printf("div zero error\n");
     while (1)
@@ -41,7 +45,7 @@ void do_div_zero_error(uint8_t vec_no)
 }
 
 // 1
-void do_debug(uint8_t vec_no)
+void do_debug(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 {
     printf("debug error\n");
     while (1)
@@ -49,7 +53,7 @@ void do_debug(uint8_t vec_no)
 }
 
 // 2
-void do_nmi(uint8_t vec_no)
+void do_nmi(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 {
     printf("nmi error\n");
     while (1)
@@ -57,7 +61,7 @@ void do_nmi(uint8_t vec_no)
 }
 
 // 3
-void do_int3(uint8_t vec_no)
+void do_int3(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 {
     printf("int3 error\n");
     while (1)
@@ -65,7 +69,7 @@ void do_int3(uint8_t vec_no)
 }
 
 // 4
-void do_overflow(uint8_t vec_no)
+void do_overflow(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 {
     printf("overflow error\n");
     while (1)
@@ -73,7 +77,7 @@ void do_overflow(uint8_t vec_no)
 }
 
 // 5
-void do_bounds(uint8_t vec_no)
+void do_bounds(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 {
     printf("bounds error\n");
     while (1)
@@ -81,7 +85,7 @@ void do_bounds(uint8_t vec_no)
 }
 
 // 6
-void do_undefined_code(uint8_t vec_no)
+void do_undefined_code(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 {
     printf("undefined_code error\n");
     while (1)
@@ -89,7 +93,7 @@ void do_undefined_code(uint8_t vec_no)
 }
 
 // 7
-void do_device_not_available(uint64_t rsp, uint64_t error_code)
+void do_device_not_available(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 {
     printf("device_not_available error\n");
     while (1)
@@ -97,7 +101,7 @@ void do_device_not_available(uint64_t rsp, uint64_t error_code)
 }
 
 // 8
-void do_double_fault(uint64_t rsp, uint64_t error_code)
+void do_double_fault(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 {
     printf("double error\n");
     while (1)
@@ -105,7 +109,7 @@ void do_double_fault(uint64_t rsp, uint64_t error_code)
 }
 
 // 9
-void do_coprocessor_segment_overrun(uint64_t rsp, uint64_t error_code)
+void do_coprocessor_segment_overrun(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 {
     printf("coprocessor_segment_overrun\n");
     while (1)
@@ -113,7 +117,7 @@ void do_coprocessor_segment_overrun(uint64_t rsp, uint64_t error_code)
 }
 
 // 10
-void do_invalid_TSS(uint64_t rsp, uint64_t error_code)
+void do_invalid_TSS(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 {
     printf("invalid TSS error\n");
     while (1)
@@ -121,7 +125,7 @@ void do_invalid_TSS(uint64_t rsp, uint64_t error_code)
 }
 
 // 11
-void do_segment_not_present(uint64_t rsp, uint64_t error_code)
+void do_segment_not_present(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 {
     printf("segment_not_present error\n");
     while (1)
@@ -129,7 +133,7 @@ void do_segment_not_present(uint64_t rsp, uint64_t error_code)
 }
 
 // 12
-void do_stack_segment_fault(uint64_t rsp, uint64_t error_code)
+void do_stack_segment_fault(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 {
     printf("stack_segment_fault\n");
     while (1)
@@ -137,7 +141,7 @@ void do_stack_segment_fault(uint64_t rsp, uint64_t error_code)
 }
 
 // 13
-void do_general_protection(uint64_t rsp, uint64_t error_code)
+void do_general_protection(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 {
     printf("do_general_protection\n");
     while (1)
@@ -145,7 +149,7 @@ void do_general_protection(uint64_t rsp, uint64_t error_code)
 }
 
 // 14
-void do_page_fault(uint64_t rsp, uint64_t error_code)
+void do_page_fault(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 {
     printf("do_page_fault\n");
     while (1)
@@ -155,7 +159,7 @@ void do_page_fault(uint64_t rsp, uint64_t error_code)
 // 15号异常保留不用
 
 // 16
-void do_x87_FPU_error(uint64_t rsp, uint64_t error_code)
+void do_x87_FPU_error(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 {
     printf("do_x87_FPU_error\n");
     while (1)
@@ -163,7 +167,7 @@ void do_x87_FPU_error(uint64_t rsp, uint64_t error_code)
 }
 
 // 17
-void do_alignment_check(uint64_t rsp, uint64_t error_code)
+void do_alignment_check(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 {
     printf("do_alignment_check\n");
     while (1)
@@ -171,7 +175,7 @@ void do_alignment_check(uint64_t rsp, uint64_t error_code)
 }
 
 // 18
-void do_machine_check(uint64_t rsp, uint64_t error_code)
+void do_machine_check(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 {
     printf("do_machine_check\n");
     while (1)
@@ -179,7 +183,7 @@ void do_machine_check(uint64_t rsp, uint64_t error_code)
 }
 
 // 19
-void do_SIMD_exception(uint64_t rsp, uint64_t error_code)
+void do_SIMD_exception(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 {
     printf("do_SIMD_exception\n");
     while (1)
@@ -187,7 +191,7 @@ void do_SIMD_exception(uint64_t rsp, uint64_t error_code)
 }
 
 // 20
-void do_virtualization_exception(uint64_t rsp, uint64_t error_code)
+void do_virtualization_exception(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 {
     printf("do_virtualization_exception\n");
     while (1)
@@ -197,7 +201,7 @@ void do_virtualization_exception(uint64_t rsp, uint64_t error_code)
 // 21-31号是intel保留未使用的，32-255用户自定义使用
 
 // 通用的中断处理函数,一般用在异常出现时的处理
-static void general_intr_handler(uint64_t rsp, uint64_t error_code)
+static void general_intr_handler(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 {
     // 后面再具体设计中断处理函数的形式吧
     printf("interrupt to do\n");
@@ -205,14 +209,29 @@ static void general_intr_handler(uint64_t rsp, uint64_t error_code)
         ;
 }
 
-// 32号中断设置为时钟
+// 32-55号为外部中断，统一使用do_IRQ处理，在该函数中再根据中断向量号跳转到具体的中断处理函数
+void do_IRQ(struct pt_regs *regs, uint64_t nr)
+{
+    uint8_t x;
+    irq_desc_T *irq = &interrupt_desc[nr - 32];
 
-// 33号中断设置为键盘
+    // 调用具体的中断处理函数
+    if (irq->handler != NULL)
+    {
+        irq->handler(nr, irq->parameter, regs);
+    }
+
+    // 中断应答，比如发送EOI
+    if (irq->controller != NULL && irq->controller->ack != NULL)
+    {
+        irq->controller->ack(nr);
+    }
+}
 
 // 键盘使用的是8042芯片，它的数据端口是0x60，数据长度是8位
 // 必须要将数据端口中的数据读取完毕之后才能触发下次键盘中断
 // 0x64端口是状态寄存器和控制寄存器,因此该端口可读可写，读和写该端口的含义不一样
-void do_keyboard(uint64_t rsp, uint64_t error_code)
+void do_keyboard(uint64_t rsp, uint32_t error_code)
 {
     // 读取键盘扫描码
     uint8_t scancode = inb(0x60);
@@ -280,7 +299,12 @@ static void idt_func_table_init()
     idt_func_table[19] = do_SIMD_exception;
     idt_func_table[20] = do_virtualization_exception;
     // 21-31号中断是intel保留未使用的
-    idt_func_table[33] = do_keyboard;
+    // 32-55作为外部中断，中断处理函数统一为do_IRQ，然后在该函数中根据中断向量号来调用具体的中断处理函数
+    for (int i = 32; i <56; i++)
+    {
+        // todo 外部中断控制结构体的初始化
+        idt_func_table[i] = do_IRQ;
+    }
 }
 
 // 完成有关中断的所有初始化工作
@@ -290,4 +314,44 @@ void idt_init()
     idt_table_init();
     idt_func_table_init();
     printf("idt_init done\n");
+}
+
+// 注册外部中断处理函数
+// 其实就是给中断控制结构体irq_desc_T赋值，然后调用install函数和enable函数
+int register_irq(uint64_t irq,
+                 void *arg,
+                 void (*handler)(uint64_t nr, uint64_t parameter, struct pt_regs *regs),
+                 uint64_t parameter,
+                 hw_int_controller *controller,
+                 char *irq_name)
+{
+    irq_desc_T *p = &interrupt_desc[irq - 32];
+
+    p->controller = controller;
+    p->irq_name = irq_name;
+    p->parameter = parameter;
+    p->flags = 0;
+    p->handler = handler;
+
+    p->controller->install(irq, arg);
+    p->controller->enable(irq);
+
+    return 1;
+}
+
+// 卸载外部中断处理函数
+int unregister_irq(uint64_t irq)
+{
+    irq_desc_T *p = &interrupt_desc[irq - 32];
+
+    p->controller->disable(irq);
+    p->controller->uninstall(irq);
+
+    p->controller = NULL;
+    p->irq_name = NULL;
+    p->parameter = 0;
+    p->flags = 0;
+    p->handler = NULL;
+
+    return 1;
 }
