@@ -205,9 +205,10 @@ void do_virtualization_exception(uint64_t rsp, uint8_t vec_no, uint32_t error_co
 static void general_intr_handler(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 {
     // 后面再具体设计中断处理函数的形式吧
-    printf("interrupt to do\n");
-    while (1)
-        ;
+    printf("interrupt to do: interrupt number %d\n",vec_no);
+    // 发送中断结束命令
+    outb(0x20, 0x20);
+    outb(0xa0, 0x20);
 }
 
 // 32-55号为外部中断，统一使用do_IRQ处理，在该函数中再根据中断向量号跳转到具体的中断处理函数
@@ -301,10 +302,10 @@ static void idt_func_table_init()
     idt_func_table[20] = do_virtualization_exception;
     // 21-31号中断是intel保留未使用的
     // 32-55作为外部中断，中断处理函数统一为do_IRQ，然后在该函数中根据中断向量号来调用具体的中断处理函数
-    for (int i = 32; i <56; i++)
-    {
-        idt_func_table[i] = do_IRQ;
-    }
+    // for (int i = 32; i <56; i++)
+    // {
+    //     idt_func_table[i] = do_IRQ;
+    // }
 }
 
 // 完成有关中断的所有初始化工作

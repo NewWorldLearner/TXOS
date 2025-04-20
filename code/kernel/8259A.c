@@ -18,10 +18,10 @@ void pic_8259A_init()
     outb(PIC_S_DATA, 0x02); // ICW3: 设置从片连接到主片的IR2引脚
     outb(PIC_S_DATA, 0x01); // ICW4: 8086模式, 正常EOI
 
-    // 先打开键盘中断
     // 写入OCW1命令，用于操作中断屏蔽寄存器
-    outb(PIC_M_DATA, 0xfd);
-    outb(PIC_S_DATA, 0xff);
+    // 允许键盘（IRQ1）、级联（IRQ2）、鼠标（IRQ12）
+    outb(PIC_M_DATA, 0xF9); // 1111 1001
+    outb(PIC_S_DATA, 0xEF); // 1110 1111
 
     sti();
 

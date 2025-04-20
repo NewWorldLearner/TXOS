@@ -230,12 +230,14 @@ void keyboard_handler(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 
 }
 
-/* 键盘初始化 */
+// 键盘初始化
 void keyboard_init()
 {
     printf("keyboard init start\n");
     // 其实键盘的输入应该保存在一个输入缓冲区，以便后续可以使用，比如shell命令就需要读取一个字符串，但是我们先不完成这个
-    
+
+    // 理论上我们还应该配置键盘的，比如配置将扫描码转换为第1套扫描码，不配置的话在默认情况下也能够满足我们的使用要求
+
     // 这里我们还是简单使用8259A作为中断代理
     idt_func_table[33] = keyboard_handler;
 

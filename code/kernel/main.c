@@ -3,6 +3,7 @@
 #include "include/debug.h"
 #include "include/memory.h"
 #include "include/keyboard.h"
+#include "include/mouse.h"
 
 #if APIC
 	#include "include/APIC.h"
@@ -27,6 +28,8 @@ void Start_Kernel(void)
 	#endif
 
 	keyboard_init();
+
+	mouse_init();
 
 	while (1)
 		;

@@ -83,6 +83,12 @@ inline static void sti()
     asm volatile ("sti \n\t": : : "cc");
 }
 
+inline static void cli()
+{
+    // cc 表示EFLAGS寄存器被修改
+    asm volatile("cli \n\t" : : : "cc");
+}
+
 void idt_init();
 
 int register_irq(uint64_t irq,
