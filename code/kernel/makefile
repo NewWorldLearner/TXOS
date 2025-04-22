@@ -6,9 +6,10 @@ PIC := iAPIC
 all: system
 	objcopy -I elf64-x86-64 -S -R ".eh_frame" -R ".comment" -O binary system kernel.bin
 
-system:	head.o main.o print_kernel.o interrupt.o interrupt_entry.o string.o debug.o memory.o bitmap.o list.o pic.o keyboard.o mouse.o
+system:	head.o main.o print_kernel.o interrupt.o interrupt_entry.o string.o debug.o memory.o bitmap.o list.o pic.o keyboard.o mouse.o \
+	disk.o				
 	ld -b elf64-x86-64 -o system head.o main.o interrupt.o interrupt_entry.o print_kernel.o string.o debug.o memory.o bitmap.o list.o \
-	pic.o keyboard.o mouse.o      \
+	pic.o keyboard.o mouse.o disk.o    \
 	-T kernel.lds 
 
 main.o:	main.c
@@ -47,6 +48,9 @@ keyboard.o: device/keyboard.c
 
 mouse.o: device/mouse.c
 	gcc $(CFLAGS) -c device/mouse.c
+
+disk.o: device/disk.c
+	gcc $(CFLAGS) -c device/disk.c
 
 memory.o: memory.c
 	gcc $(CFLAGS) -c memory.c

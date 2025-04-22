@@ -144,7 +144,7 @@ void do_stack_segment_fault(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 // 13
 void do_general_protection(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 {
-    printf("do_general_protection\n");
+    printf("do_general_protection, error code 0x%x\n", error_code);
     while (1)
         ;
 }

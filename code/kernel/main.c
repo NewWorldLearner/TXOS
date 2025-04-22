@@ -4,6 +4,7 @@
 #include "include/memory.h"
 #include "include/keyboard.h"
 #include "include/mouse.h"
+#include "include/disk.h"
 
 #if APIC
 	#include "include/APIC.h"
@@ -30,6 +31,14 @@ void Start_Kernel(void)
 	keyboard_init();
 
 	mouse_init();
+
+	// disk_init();
+
+	// char buff[512];
+	// IDE_transfer(ATA_READ_CMD,0,1,buff);
+	// printf("LBA 0 sector:%s\n",buff);
+
+
 
 	while (1)
 		;
