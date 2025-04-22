@@ -5,6 +5,7 @@
 #include "include/keyboard.h"
 #include "include/mouse.h"
 #include "include/disk.h"
+#include "include/timer.h"
 
 #if APIC
 	#include "include/APIC.h"
@@ -38,7 +39,7 @@ void Start_Kernel(void)
 	// IDE_transfer(ATA_READ_CMD,0,1,buff);
 	// printf("LBA 0 sector:%s\n",buff);
 
-
+	timer_init();
 
 	while (1)
 		;
