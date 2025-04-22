@@ -5,8 +5,6 @@
 #include "include/bitmap.h"
 #include "include/list.h"
 
-#define NULL (void *)0
-
 struct Slab *kmalloc_create_slab(uint64_t size);
 
 extern char _text;

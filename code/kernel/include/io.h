@@ -59,4 +59,6 @@ static inline void outsw(uint16_t port, const void *addr, uint32_t word_cnt)
     asm volatile("cld; rep outsw" : "+S"(addr), "+c"(word_cnt) : "d"(port): "memory");
 }
 
+#define nop() asm volatile("nop	\n\t")
+
 #endif

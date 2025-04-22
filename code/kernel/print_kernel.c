@@ -5,8 +5,6 @@
 #include "include/print_kernel.h"
 #include "include/font.h"
 
-#define NULL (void *)0
-
 struct position Pos;
 
 void init_screen()

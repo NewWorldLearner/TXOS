@@ -2,12 +2,6 @@
 #include "list.h"
 #include "stdint.h"
 
-#define container_of(ptr, type, member)                           \
-    ({                                                            \
-        typeof(((type *)0)->member) *p = (ptr);                   \
-        (type *)((uint64_t)p - (uint64_t)&(((type *)0)->member)); \
-    })
-
 #define KERNEL_START ((uint64_t)0xffff800000000000)
 
 #define PAGE_GDT_SHIFT 39
