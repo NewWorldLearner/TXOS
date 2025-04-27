@@ -1,3 +1,5 @@
+#ifndef _MEMORY_H
+#define _MEMORY_H
 
 #include "list.h"
 #include "stdint.h"
@@ -248,6 +250,18 @@ typedef struct
 #define mk_pt(addr, attr) ((uint64_t)(addr) | (uint64_t)(attr))
 #define set_pt(ptptr, ptval) (*(ptptr) = (ptval))
 
+extern char _text;
+extern char _etext;
+extern char _data;
+extern char _edata;
+extern char _rodata;
+extern char _erodata;
+extern char _bss;
+extern char _ebss;
+extern char _end;
+extern uint64_t *Global_CR3;
+extern struct Global_Memory_Descriptor memory_management_struct;
+
 void init_memory();
 struct Page *alloc_pages(int zone_select, int number, uint64_t page_flags);
 void free_pages(struct Page *page, int number);
@@ -255,6 +269,8 @@ uint64_t init_memory_slab();
 void *kmalloc(uint64_t size, uint64_t gfp_flages);
 uint64_t kfree(void *address);
 void pagetable_init();
+
+#endif
 
 
 

@@ -6,6 +6,7 @@
 #include "include/mouse.h"
 #include "include/disk.h"
 #include "include/timer.h"
+#include "include/thread.h"
 
 #if APIC
 	#include "include/APIC.h"
@@ -20,7 +21,7 @@ void Start_Kernel(void)
     init_screen();
 	init_memory();
 	idt_init();
-	init_memory_slab();
+	//init_memory_slab();
 	pagetable_init();
 
 	#if APIC
@@ -39,7 +40,9 @@ void Start_Kernel(void)
 	// IDE_transfer(ATA_READ_CMD,0,1,buff);
 	// printf("LBA 0 sector:%s\n",buff);
 
-	timer_init();
+	//timer_init();
+
+	kernel_process_init();
 
 	while (1)
 		;
