@@ -21,15 +21,8 @@ typedef void* intr_handler;
 #define IDT_DESC_ATTR_INTERRUPT 0x8E // 外部中断，P=1,DPL=0,TYPE=0xF
 #define IDT_DESC_ATTR_SYSTEM 0xEE    // 系统调用，P=1,DPL=3,TYPE=0xF
 
-
-
-
-// HardWare interrupt type
-
 struct pt_regs
 {
-    uint64_t es;
-    uint64_t ds;
     uint64_t r15;
     uint64_t r14;
     uint64_t r13;
@@ -38,14 +31,16 @@ struct pt_regs
     uint64_t r10;
     uint64_t r9;
     uint64_t r8;
-    uint64_t rbp;
-    uint64_t rdi;
-    uint64_t rsi;
-    uint64_t rdx;
-    uint64_t rcx;
     uint64_t rbx;
+    uint64_t rcx;
+    uint64_t rdx;
+    uint64_t rsi;
+    uint64_t rdi;
+    uint64_t rbp;
+    uint64_t ds;
+    uint64_t es;
     uint64_t rax;
-    // 发生中断时，会自动压入EFLAGS，CS，IP，如果有特权级转移，还会压入原来的SS和ESP，对于异常还有错误码会自动压入
+    uint64_t func;                  // 系统调用
     uint64_t errcode;
     uint64_t rip;
     uint64_t cs;
@@ -54,6 +49,7 @@ struct pt_regs
     uint64_t ss;
 };
 
+// HardWare interrupt type
 // 中断寄存器的操作接口集合
 typedef struct hw_int_type
 {

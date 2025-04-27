@@ -93,7 +93,7 @@ void kernel_process_init()
     init_kernel_mm();
     init_kernel_tss();
     // 值得注意的是，每个进程都有自己的TSS数据，但是需要放到TSS中才能在中断的时候使用到
-    set_tss64(kernel_thread.rsp0, kernel_tss.rsp1, kernel_tss.rsp2, kernel_tss.ist1, kernel_tss.ist2, kernel_tss.ist3, kernel_tss.ist4, kernel_tss.ist5, kernel_tss.ist6, kernel_tss.ist7);
+    set_tss64(&kernel_tss);
 
     printf("init kernel task done!\n");
 }

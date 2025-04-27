@@ -1,6 +1,5 @@
-#ifndef _TASK_H_
-
-#define _TASK_H_
+#ifndef _THREAD_H_
+#define _THREAD_H_
 
 #include "memory.h"
 #include "interrupt.h"
@@ -113,5 +112,9 @@ union task_union
 
 
 void kernel_process_init();
+
+int thread_create(uint64_t (*function)(uint64_t), uint64_t arg);
+
+void set_tss64(struct tss_struct *tss);
 
 #endif
