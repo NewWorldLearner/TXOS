@@ -50,7 +50,35 @@ entry64:
 	movq	%rax,	%es
 	movq	%rax,	%gs
 	movq	%rax,	%ss
-	movq	$0xffff800000007E00,	%rsp		/* rsp address */
+	movq	_stack_start(%rip),	%rsp		// 内核进程的栈底
+
+setup_TSS64:
+	leaq	TSS64_Table(%rip),	%rdx
+	xorq	%rax,	%rax
+	xorq	%rcx,	%rcx
+	movq	$0x89,	%rax					// 设置类型字段为0x89（64位TSS，P=1, DPL=0, Type=9）
+	shlq	$40,	%rax					// RAX保存TSS描述符的低64位，左移40位，将类型字段放到TSS描述符的40位
+
+	movl	%edx,	%ecx					// 取TSS地址的低32位到ECX
+	shrl	$24,	%ecx					// 取TSS基地址的31-24位
+	shlq	$56,	%rcx					// 左移56位，RCX的高8位保存TSS基地址的31-24位
+	addq	%rcx,	%rax					// 合并基地址31-24位到RAX
+
+	xorq	%rcx,	%rcx
+	movl	%edx,	%ecx					// 重新加载TSS地址的低32位到ECX
+	andl	$0xffffff,	%ecx				// 保留基地址的低24位（基地址的0-23位）
+	shlq	$16,	%rcx					// 左移16位，TSS描述符的低64位的16-39位保存TSS基地址的0-23位
+	addq	%rcx,	%rax					// 合并到RAX
+
+	addq	$103,	%rax					// TSS描述符的0-15，48-51位为段限长，设为103
+
+	leaq	GDT_Table(%rip),	%rdi		// 加载GDT基地址到RDI
+	movq	%rax,	80(%rdi)				// 写入TSS描述符的低64位到GDT偏移量为80的地方
+	shrq	$32,	%rdx					// 取TSS地址的高32位
+	movq	%rdx,	88(%rdi)				// 写入TSS描述符的高64位到GDT偏移量为88的地方
+
+	mov	$0x50,	%ax							// TSS描述符对应的选择子为8*10=0x50
+	ltr	%ax									// 加载TSS
 
 	movq	go_to_kernel(%rip),	%rax		/* movq address */
 	pushq	$0x08
@@ -83,7 +111,7 @@ __PDPTE:
 
 __PDE:						//页中级目录的地址设置到0x103000处
 
-// 将物理地址0开始的10MB内存映射到线性地址0x00和0xffff800000000000处
+// 将物理地址0开始的48MB内存映射到线性地址0x00和0xffff800000000000处
 
 	.quad	0x000083	
 	.quad	0x200083
@@ -134,7 +162,7 @@ GDT_Table:
 	.quad	0x0000f20000000000			/*4	USER	Data	64-bit	Segment	20*/
 	.quad	0x00cf9a000000ffff			/*5	KERNEL	Code	32-bit	Segment	28*/
 	.quad	0x00cf92000000ffff			/*6	KERNEL	Data	32-bit	Segment	30*/
-	.fill	10,8,0					/*8 ~ 9	TSS (jmp one segment <7>) in long-mode 128-bit 40*/
+	.fill	10,8,0					    /*8 ~ 9	TSS (jmp one segment <7>) in long-mode 128-bit 40 */
 GDT_END:
 
 GDT_POINTER:
@@ -164,4 +192,9 @@ TSS64_END:
 TSS64_POINTER:
 TSS64_LIMIT:	.word	TSS64_END - TSS64_Table - 1
 TSS64_BASE:	.quad	TSS64_Table
+
+.globl _stack_start
+
+_stack_start:
+	.quad	kernel_task_union + 32768
 

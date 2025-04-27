@@ -111,10 +111,30 @@ union task_union
 } __attribute__((aligned(8))); // 8Bytes align
 
 
+static struct task_struct *get_current()
+{
+    struct task_struct *current = NULL;
+    __asm__ __volatile__("andq %%rsp,%0	\n\t" : "=r"(current) : "0"(~32767UL));
+    return current;
+}
+
+#define current get_current()
+
+#define GET_CURRENT        \
+    "movq	%rsp,	%rbx	\n\t" \
+    "andq	$-32768,%rbx	\n\t"
+
+extern unsigned int TSS64_Table[26];
+
+
 void kernel_process_init();
 
 int thread_create(uint64_t (*function)(uint64_t), uint64_t arg);
 
 void set_tss64(struct tss_struct *tss);
+
+void switch_to(struct task_struct *cur, struct task_struct *next);
+
+void schedule();
 
 #endif

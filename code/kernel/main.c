@@ -16,6 +16,16 @@
 
 extern struct Global_Memory_Descriptor memory_management_struct;
 
+
+uint64_t init(uint64_t arg)
+{
+	struct pt_regs *regs;
+
+	printf("init task is running,arg:%x\n", arg);
+	while (1)
+		;
+}
+
 void Start_Kernel(void)
 {
     init_screen();
@@ -43,6 +53,10 @@ void Start_Kernel(void)
 	//timer_init();
 
 	kernel_process_init();
+
+	thread_create(init, 0);
+
+	schedule();
 
 	while (1)
 		;

@@ -144,3 +144,100 @@ int thread_create(uint64_t (*function)(uint64_t), uint64_t arg)
 }
 
 
+
+//-----------------------以下函数用于辅助实现进程的切换-----------------------
+
+void set_tss64(struct tss_struct *tss)
+{
+    *(uint64_t *)(TSS64_Table + 1) = tss->rsp0;
+    *(uint64_t *)(TSS64_Table + 3) = tss->rsp1;
+    *(uint64_t *)(TSS64_Table + 5) = tss->rsp2;
+
+    *(uint64_t *)(TSS64_Table + 9) = tss->ist1;
+    *(uint64_t *)(TSS64_Table + 11) = tss->ist2;
+    *(uint64_t *)(TSS64_Table + 13) = tss->ist3;
+    *(uint64_t *)(TSS64_Table + 15) = tss->ist4;
+    *(uint64_t *)(TSS64_Table + 17) = tss->ist5;
+    *(uint64_t *)(TSS64_Table + 19) = tss->ist6;
+    *(uint64_t *)(TSS64_Table + 21) = tss->ist7;
+}
+
+#define PUSHALL                                      \
+    "pushfq                                    \n\t" \
+    "pushq %%r15                               \n\t" \
+    "pushq %%r14                               \n\t" \
+    "pushq %%r13                               \n\t" \
+    "pushq %%r12                               \n\t" \
+    "pushq %%r11                               \n\t" \
+    "pushq %%r10                               \n\t" \
+    "pushq %%r9                                \n\t" \
+    "pushq %%r8                                \n\t" \
+    "pushq %%rbp                               \n\t" \
+    "pushq %%rdi                               \n\t" \
+    "pushq %%rsi                               \n\t" \
+    "pushq %%rdx                               \n\t" \
+    "pushq %%rcx                               \n\t" \
+    "pushq %%rbx                               \n\t" \
+    "pushq %%rax                               \n\t"
+
+#define POPALL                                       \
+    "popq %%rax                                \n\t" \
+    "popq %%rbx                                \n\t" \
+    "popq %%rcx                                \n\t" \
+    "popq %%rdx                                \n\t" \
+    "popq %%rsi                                \n\t" \
+    "popq %%rdi                                \n\t" \
+    "popq %%rbp                                \n\t" \
+    "popq %%r8                                 \n\t" \
+    "popq %%r9                                 \n\t" \
+    "popq %%r10                                \n\t" \
+    "popq %%r11                                \n\t" \
+    "popq %%r12                                \n\t" \
+    "popq %%r13                                \n\t" \
+    "popq %%r14                                \n\t" \
+    "popq %%r15                                \n\t" \
+    "popfq                                     \n\t"
+
+// 下面的函数中，首先对cur进程的上下文进行压栈保护
+// 然后cur进程的rsp保存在当前进程的PCB中
+// 加载next进程的rsp
+// 设定cur进程的rip并存放在cur进程的PCB中
+// 将next进程的rip压入next的栈中
+// 使用ret指令执行next进程
+// 进入swict_to时在cur的栈中压入了返回地址，等cur下次在执行的时候，就会使cur::swict_to函数执行完,因此rip被自动保存
+// 这里我们手动保存rip的话，好像也并没有关系，因为第1次ret执行的是被保存的rip，第2次ret会回到switch的调用者，手动保存rip，那么就无需强制rip的位置了
+// 因此可以得出结论，最重要的是保存esp
+void switch_to(struct task_struct *cur, struct task_struct *next)
+{
+    // 首先切换TSS
+    set_tss64(next->tss);
+
+    printf("set tss done\n");
+
+    // 然后再切换上下文
+    __asm__ __volatile__(
+        PUSHALL
+        "movq	%%rsp,	%0	\n\t"
+        "movq	%2,	%%rsp	\n\t"
+        "leaq	1f(%%rip),	%%rax	\n\t"
+        "movq	%%rax,	%1	\n\t"
+        "pushq	%3		\n\t"
+        "ret	\n\t"
+        "1:	\n\t" 
+        POPALL
+        : "=m"(cur->thread->rsp), "=m"(cur->thread->rip)
+        : "m"(next->thread->rsp), "m"(next->thread->rip), "D"(cur), "S"(next)
+        : "memory");
+}
+
+
+// 实现的进程调度，现在我们并不设计进程调度算法，只是简单的将当前进程换下处理器
+void schedule()
+{
+    struct task_struct *cur = get_current();
+    struct task_struct *next = container_of(list_next(&current->list), struct task_struct, list);
+
+    cli();
+    switch_to(cur, next);
+    sti();
+}
