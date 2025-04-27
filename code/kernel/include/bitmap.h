@@ -3,8 +3,14 @@
 
 #include "stdint.h"
 
-int bitmap_test(uint64_t *bitmap, uint64_t bit_index);
-int bitmap_scan(uint64_t *bitmap, uint32_t bitmap_length, uint32_t count);
-void bitmap_set(uint64_t *bitmap, uint64_t bit_index, int8_t value);
+struct bitmap
+{
+    uint64_t *bits;       // 位图的起始地址
+    uint64_t length;        // 位图所占的字节
+};
+
+int bitmap_test(struct bitmap *bitmap, uint64_t bit_index);
+int bitmap_scan(struct bitmap *bitmap, uint64_t count);
+void bitmap_set(struct bitmap *bitmap, uint64_t bit_index, int8_t value);
 
 #endif

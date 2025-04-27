@@ -288,7 +288,6 @@ void init_memory()
 
     // 之前我们使用的地址都是虚拟地址，现在要对这些虚拟地址对应的物理页进行标记，标记它们使用过
     mark_used_pages();
-    printf("used page bitmap: 0x");
     for (int i = 0; i <= (Virt_To_Phy(memory_management_struct.end_of_struct) >> PAGE_2M_SHIFT); i++)
     {
         printf("%x ", memory_management_struct.bits_map[i]);
@@ -354,10 +353,12 @@ struct Page *alloc_pages(int zone_select, int number, uint64_t page_flags)
     for (int i = zone_start_index; i <= zone_end_index; i++)
     {
         struct Zone *zone = memory_management_struct.zones_struct + i;
-        int bit_start = zone->zone_start_address >> PAGE_2M_SHIFT;
-        int bit_end = zone->zone_end_address >> PAGE_2M_SHIFT;
-        int zone_bitmap_length = (bit_end - bit_start) / 8;
-        free_index = bitmap_scan(memory_management_struct.bits_map, zone_bitmap_length, number);
+        uint64_t bit_start = zone->zone_start_address >> PAGE_2M_SHIFT;
+        uint64_t bit_end = zone->zone_end_address >> PAGE_2M_SHIFT;
+        uint64_t zone_bitmap_length = (bit_end - bit_start) / 8;
+        struct bitmap map = {(uint64_t *)(bit_start), zone_bitmap_length};
+
+        free_index = bitmap_scan(&map, number);
 
         if (free_index == -1)
         {
@@ -523,11 +524,12 @@ static struct Slab *find_available_slab(struct Slab_cache *cache)
 
 static void *allocate_from_slab(struct Slab *slab, struct Slab_cache *cache)
 {
-    uint64_t idx = bitmap_scan(slab->color_map, slab->color_length, 1);
+    struct bitmap map = {slab->color_map, slab->color_length};
+    uint64_t idx = bitmap_scan(&map, 1);
     if (idx == -1)
         return NULL;
 
-    bitmap_set(slab->color_map, idx, 1);
+    bitmap_set(&map, idx, 1);
     slab->using_count++;
     slab->free_count--;
     cache->total_free--;

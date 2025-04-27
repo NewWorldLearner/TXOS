@@ -1,17 +1,20 @@
 #include "../include/bitmap.h"
 #include "../include/print_kernel.h"
-int bitmap_test(uint64_t *bitmap, uint64_t bit_index)
+#include "../include/debug.h"
+
+int bitmap_test(struct bitmap *bitmap, uint64_t bit_index)
 {
+    ASSERT(bit_index < bitmap->length * 8);
     int i = bit_index >> 6;
     int j = bit_index % 64;
-    return bitmap[i] & (1UL << j);
+    return bitmap->bits[i] & (1UL << j);
 }
 
-int bitmap_scan(uint64_t *bitmap, uint32_t bitmap_length, uint32_t count)
+int bitmap_scan(struct bitmap *bitmap, uint64_t count)
 {
 
-    int total_bits = bitmap_length * 8;
-    int total_words = bitmap_length / 8;
+    int total_bits = bitmap->length * 8;
+    int total_words = bitmap->length / 8;
     if (count == 0 || count > total_bits)
     {
         return -1;
@@ -19,7 +22,7 @@ int bitmap_scan(uint64_t *bitmap, uint32_t bitmap_length, uint32_t count)
 
     uint32_t word_idx = 0;
     // 每次比较8个字节
-    while (word_idx < total_words && bitmap[word_idx] == 0xffffffffffffffff)
+    while (word_idx < total_words && bitmap->bits[word_idx] == 0xffffffffffffffff)
     {
         word_idx++;
     }
@@ -31,7 +34,7 @@ int bitmap_scan(uint64_t *bitmap, uint32_t bitmap_length, uint32_t count)
     int bit_index = 0;
 
     // 找到第i个unsigned long中的空闲位
-    while (bitmap[word_idx] & (1UL << bit_index))
+    while (bitmap->bits[word_idx] & (1UL << bit_index))
     {
         bit_index++;
     }
@@ -55,23 +58,23 @@ int bitmap_scan(uint64_t *bitmap, uint32_t bitmap_length, uint32_t count)
         next_bit++;
     }
     // 接下来还需要判断获取到的位是否超过了位界限
-    if (next_bit > bitmap_length * 8)
+    if (next_bit > bitmap->length * 8)
     {
         return -1;
     }
     return next_bit - count;
 }
 
-void bitmap_set(uint64_t *bitmap, uint64_t bit_index, int8_t value)
+void bitmap_set(struct bitmap *bitmap, uint64_t bit_index, int8_t value)
 {
     int i = bit_index >> 6;
     int j = bit_index % 64;
     if (value)
     {
-        bitmap[i] |= (1UL << j);
+        bitmap->bits[i] |= (1UL << j);
     }
     else
     {
-        bitmap[i] &= ~(1UL << j);
+        bitmap->bits[i] &= ~(1UL << j);
     }
 }
