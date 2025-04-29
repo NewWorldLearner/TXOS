@@ -19,16 +19,38 @@ void init_screen()
     Pos.XCharSize = 8;
     Pos.YCharSize = 16;
 
-    Pos.FB_addr = (int *)0xffff800003000000;
+    Pos.FB_addr = (uint32_t *)0xffff800003000000;
     Pos.FB_length = Pos.XResolution * Pos.YResolution * 4;
+
+}
+
+// 滚屏其实就是删除第1行的元素，然后把后面每行的元素前移，可以联想一下数组元素的删除
+void roll_screen()
+{
+    // 一行占据的像素点，每次移动那么多像素点，一个像素点占4字节
+    int line = Pos.XResolution * Pos.YCharSize * 4;
+    // 总的行数
+    int count = Pos.YResolution / Pos.YCharSize;
+
+    uint8_t *dst = (uint8_t*)Pos.FB_addr;
+    uint8_t *src = dst + line;
+    for (int i = 0; i < count - 1; i++)
+    {
+        memcpy(dst, src, line);
+        dst += line;
+        src += line;
+    }
+
+    // 最后一行使用背景色填充
+    memset(dst, 0x00, line);
 }
 
 // fb是帧缓存区首地址，Xsize表示屏幕的长度，x表示字符的显示位置的像素偏移量，y同理
-void putchar(unsigned int *fb, int Xsize, int x, int y, unsigned int FRcolor, unsigned int BKcolor, unsigned char font)
+void putchar(uint32_t *fb, int Xsize, int x, int y, uint32_t FRcolor, uint32_t BKcolor, uint8_t font)
 {
     int i = 0, j = 0;
-    unsigned int *addr = NULL;
-    unsigned char *fontp = NULL;
+    uint32_t *addr = NULL;
+    uint8_t *fontp = NULL;
     int testval = 0;
     fontp = font_ascii[font];
 
@@ -54,7 +76,7 @@ void putchar(unsigned int *fb, int Xsize, int x, int y, unsigned int FRcolor, un
 // 当遇到\n字符时，换行
 // 当遇到\b字符时，用空格代替前一个字符，并将下一个字符显示位置回退1
 // 当遇到\t字符时，按制表符对齐
-int color_print_string(unsigned int FRcolor, unsigned int BKcolor, const char *str)
+int color_print_string(uint32_t FRcolor, uint32_t BKcolor, const char *str)
 {
     int len = strlen(str);
     int i = 0;
@@ -106,9 +128,11 @@ int color_print_string(unsigned int FRcolor, unsigned int BKcolor, const char *s
             Pos.YCharPosition++;
             Pos.XCharPosition = 0;
         }
-        if (Pos.YCharPosition >= (Pos.YResolution / Pos.YCharSize))
+        // bochs虚拟机的最后8行显示不出来，因此这里提前8行就滚屏
+        if (Pos.YCharPosition >= (Pos.YResolution / Pos.YCharSize) - 8)
         {
-            Pos.YCharPosition = 0;
+            roll_screen();
+            Pos.YCharPosition--;
         }
     }
     return len;
@@ -160,36 +184,35 @@ int vsprintf(char *buf, const char *format, va_list args)
             index_char = *(++index_ptr);
             continue;
         }
-        index_char = *(++index_ptr);            // 得到%后面的字符
+        index_char = *(++index_ptr); // 得到%后面的字符
         switch (index_char)
         {
-            case 's':
-                arg_str = va_arg(args, char*);
-                strcpy(str, arg_str);
-                str += strlen(arg_str);         // 注意修改str的值
-                index_char = *(++index_ptr);
-                break;
-            case 'c':
-                // 注意这里传入的本应该是char，但是gcc会报警告，char被提升为int
-                *(str++) = va_arg(args, int); // (*str)++会提示表达式是不可修改的左值，这是一个值得研究的问题，查看其汇编代码是怎么样的，和*(str++)的汇编代码有什么区别？
-                index_char = *(++index_ptr);
-                break;
-            case 'd':
-                arg_int64 = va_arg(args,int);
-                if (arg_int64 < 0)
-                {
-                    arg_int64 = -arg_int64;
-                    *str++ = '-';
-                }
-                itoa(arg_int64, &str, 10);
-                index_char = *(++index_ptr);
-                break;
-            case 'x':
-                arg_uint64 = va_arg(args, unsigned long);
-                itoa(arg_uint64, &str, 16);            // 注意需要需要更新str的值，因此传入str的地址
-                index_char = *(++index_ptr);
-                break;
-            
+        case 's':
+            arg_str = va_arg(args, char *);
+            strcpy(str, arg_str);
+            str += strlen(arg_str); // 注意修改str的值
+            index_char = *(++index_ptr);
+            break;
+        case 'c':
+            // 注意这里传入的本应该是char，但是gcc会报警告，char被提升为int
+            *(str++) = va_arg(args, int); // (*str)++会提示表达式是不可修改的左值，这是一个值得研究的问题，查看其汇编代码是怎么样的，和*(str++)的汇编代码有什么区别？
+            index_char = *(++index_ptr);
+            break;
+        case 'd':
+            arg_int64 = va_arg(args, int);
+            if (arg_int64 < 0)
+            {
+                arg_int64 = -arg_int64;
+                *str++ = '-';
+            }
+            itoa(arg_int64, &str, 10);
+            index_char = *(++index_ptr);
+            break;
+        case 'x':
+            arg_uint64 = va_arg(args, uint64_t);
+            itoa(arg_uint64, &str, 16); // 注意需要需要更新str的值，因此传入str的地址
+            index_char = *(++index_ptr);
+            break;
         }
     }
     return strlen(buf);
@@ -197,9 +220,9 @@ int vsprintf(char *buf, const char *format, va_list args)
 
 int printf(char *format, ...)
 {
-    char buf[1024] = {0};           // 这里曾经没有初始化，导致打印结果不正确，原因在于多次调用printf时，栈中残留着之前的字符串数据
+    char buf[1024] = {0}; // 这里曾经没有初始化，导致打印结果不正确，原因在于多次调用printf时，栈中残留着之前的字符串数据
     va_list args;
-    va_start(args, format);             // 曾经忘记过将args初始化，导致错误
+    va_start(args, format); // 曾经忘记过将args初始化，导致错误
     int count = vsprintf(buf, format, args);
     va_end(args);
     color_print_string(RED, BLACK, buf);

@@ -1,6 +1,8 @@
 #ifndef _PRINT_KERNEL_H_
 #define _PRINT_KERNEL_H_
 
+#include "stdint.h"
+
 #define WHITE 	0x00ffffff		//白
 #define BLACK 	0x00000000		//黑
 #define RED	0x00ff0000			//红
@@ -15,7 +17,7 @@
 
 */
 
-extern unsigned char font_ascii[256][16];
+extern uint8_t font_ascii[256][16];
 
 struct position
 {
@@ -28,15 +30,15 @@ struct position
 	int XCharSize;      // 字符的宽度
 	int YCharSize;      // 字符的高度
 
-	unsigned int * FB_addr;     //帧缓冲地址
-	unsigned long FB_length;    // 帧缓存长度
+	uint32_t * FB_addr;     //帧缓冲地址
+	uint64_t FB_length;    // 帧缓存长度
 };
 
 void init_screen();
 
-void putchar(unsigned int *fb, int Xsize, int x, int y, unsigned int FRcolor, unsigned int BKcolor, unsigned char font);
+void putchar(uint32_t *fb, int Xsize, int x, int y, uint32_t FRcolor, uint32_t BKcolor, uint8_t font);
 
-int color_print_string(unsigned int FRcolor, unsigned int BKcolor, const char *str);
+int color_print_string(uint32_t FRcolor, uint32_t BKcolor, const char *str);
 
 int printf(char *format, ...);
 
