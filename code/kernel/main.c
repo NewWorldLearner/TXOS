@@ -31,8 +31,8 @@ void Start_Kernel(void)
     init_screen();
 	init_memory();
 	idt_init();
-	//init_memory_slab();
-	pagetable_init();
+	// init_memory_slab();
+	// pagetable_init();
 
 	#if APIC
 		LAPIC_IOAPIC_init();
@@ -52,11 +52,14 @@ void Start_Kernel(void)
 
 	//timer_init();
 
-	kernel_process_init();
+	// kernel_process_init();
 
-	thread_create(init, 0);
+	// thread_create(init, 0);
 
-	schedule();
+
+	init_memory_pool();
+	uint64_t vaddr = (uint64_t)get_vaddr(PF_KERNEL, 1, PG_Kernel);
+	printf("kernel vaddr:0x%x", vaddr);
 
 	while (1)
 		;

@@ -3,6 +3,7 @@
 
 #include "list.h"
 #include "stdint.h"
+#include "bitmap.h"
 
 #define KERNEL_START ((uint64_t)0xffff800000000000)
 
@@ -269,6 +270,29 @@ uint64_t init_memory_slab();
 void *kmalloc(uint64_t size, uint64_t gfp_flages);
 uint64_t kfree(void *address);
 void pagetable_init();
+
+struct pool
+{
+    struct bitmap pool_bitmap; // 管理内存池的位图
+};
+
+// 虚拟地址是有意义的，因为对于用户进程来说，多个进程的同一虚拟地址对应的物理内存地址并不相同
+// 因此，每个进程需要有一个虚拟地址结构体，并且需要单独的位图
+// 但对于内核空间呢？因为内核空间只有一个内核进程，因此直接复用物理内存池的位图
+struct virtual_addr
+{
+    struct bitmap vaddr_bitmap; // 虚拟地址用到的位图结构
+    uint64_t vaddr_start;       // 虚拟地址起始地址
+};
+
+enum pool_flag
+{
+    PF_KERNEL,
+    PF_USER
+};
+
+void init_memory_pool();
+void *get_vaddr(enum pool_flag pf, uint64_t pg_cnt, uint64_t page_flags);
 
 #endif
 

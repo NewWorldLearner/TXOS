@@ -4,6 +4,7 @@
 #include "include/print_kernel.h"
 #include "include/bitmap.h"
 #include "include/list.h"
+#include "include/thread.h"
 
 struct Slab *kmalloc_create_slab(uint64_t size);
 
@@ -41,6 +42,10 @@ struct Slab_cache kmalloc_cache_size[16] =
         {524288, 0, 0, NULL, NULL, NULL, NULL},
         {1048576, 0, 0, NULL, NULL, NULL, NULL}, // 1MB
 };
+
+struct pool kernel_pool;
+struct pool user_pool;
+struct virtual_addr kernel_vaddr;
 
 uint64_t page_init(struct Page *page, uint64_t flags)
 {
@@ -81,10 +86,6 @@ uint64_t set_page_attribute(struct Page *page, uint64_t flags)
     return 1;
 }
 
-
-
-
-
 // --------------------------------------------------------------------------
 // ------------下面的几个静态函数都是为了辅助init_memory这个函数的实现-----------
 // --------------------------------------------------------------------------
@@ -92,7 +93,16 @@ uint64_t set_page_attribute(struct Page *page, uint64_t flags)
 // 必须要在内存描述符初始化完成之后才能够调用该函数
 static uint64_t calculate_total_memory()
 {
-    return memory_management_struct.e820[memory_management_struct.e820_length].address + memory_management_struct.e820[memory_management_struct.e820_length].length;
+    uint64_t total_memory = 0;
+    for (int i = 0; i <= memory_management_struct.e820_length; i++)
+    {
+        // type值为1的内存段是操作系统的可用内存段
+        if (memory_management_struct.e820[i].type == 1)
+        {
+            total_memory = memory_management_struct.e820[i].address + memory_management_struct.e820[i].length;
+        }
+    }
+    return total_memory;
 }
 
 // 初始化内存描述符
@@ -307,8 +317,6 @@ void init_memory()
 //--------------------------以上是init_memory函数的实现--------------------
 //------------------------------------------------------------------------
 
-
-
 // 下面的函数是存在一些问题的，后面再进行优化,它假设了申请内存区域一定会成功，还有其它的细节问题
 struct Page *alloc_pages(int zone_select, int number, uint64_t page_flags)
 {
@@ -349,17 +357,15 @@ struct Page *alloc_pages(int zone_select, int number, uint64_t page_flags)
             return NULL;
             break;
     }
-
     for (int i = zone_start_index; i <= zone_end_index; i++)
     {
         struct Zone *zone = memory_management_struct.zones_struct + i;
         uint64_t bit_start = zone->zone_start_address >> PAGE_2M_SHIFT;
         uint64_t bit_end = zone->zone_end_address >> PAGE_2M_SHIFT;
         uint64_t zone_bitmap_length = (bit_end - bit_start) / 8;
-        struct bitmap map = {(uint64_t *)(bit_start), zone_bitmap_length};
+        struct bitmap map = {memory_management_struct.bits_map, zone_bitmap_length};
 
         free_index = bitmap_scan(&map, number);
-
         if (free_index == -1)
         {
             continue;
@@ -424,11 +430,11 @@ static void init_slab_cache(struct Slab_cache *slab_cache, uint64_t block_size)
     slab_cache->cache_pool->color_count = PAGE_2M_SIZE / block_size;
     // 位图的放置位置
     slab_cache->cache_pool->color_map = (uint64_t *)memory_management_struct.end_of_struct;
-    
+
     // 更新位图管理单元的结束位置，进行8字节对齐
     memory_management_struct.end_of_struct = (uint64_t)(memory_management_struct.end_of_struct + slab_cache->cache_pool->color_length + sizeof(long) * 10) & (~(sizeof(long) - 1));
-        // 将位图中的位全部置1
-        memset(slab_cache->cache_pool->color_map, 0xFF, slab_cache->cache_pool->color_length);
+    // 将位图中的位全部置1
+    memset(slab_cache->cache_pool->color_map, 0xFF, slab_cache->cache_pool->color_length);
     // 将可用的内存块对应的位设为0
     // 这段代码有问题
     for (int i = 0; i < slab_cache->cache_pool->color_count; i++)
@@ -487,7 +493,6 @@ uint64_t init_memory_slab()
 
         kmalloc_cache_size[i].cache_pool->page = page;
         kmalloc_cache_size[i].cache_pool->Vaddress = virtual;
-
     }
 
     return 1;
@@ -496,9 +501,6 @@ uint64_t init_memory_slab()
 //------------------------------------------------------------------------------------------------------
 //--------------------------------------init_memory_slab实现完毕----------------------------------------
 //------------------------------------------------------------------------------------------------------
-
-
-
 
 //------------------------------------------------------------------------------------------------------
 //-----------------------------------以下函数用于辅助实现内存块的回收和释放---------------------------------
@@ -740,10 +742,6 @@ uint64_t kfree(void *address)
     return 0;
 }
 
-
-
-
-
 // 下面这个函数主要是将未映射过的物理内存页进行映射，但是ZONE_UNMAPED_INDEX代表的内存区域及其之后的内存区域都不映射
 // 回想一下，线性地址转换到物理地址的过程，先是取线性地址的高9位并乘以8，得到在页全局目录中的偏移量（页全局目录项保存页上级目录的物理地址），进而可求得页上级目录的物理地址……
 // 一直到从页表中获取到线性地址对应的物理页，然后在加上页中偏移量，就可以获得一个线性地址对应的物理地址
@@ -751,7 +749,6 @@ uint64_t kfree(void *address)
 // 如果该页目录项为空，那么申请4KB的内存作为页上级目录，并将页上级目录的地址保存到页全局目录项中……
 void pagetable_init()
 {
-    uint64_t i, j;
     uint64_t *tmp = NULL;
 
     Global_CR3 = get_gdt();
@@ -759,28 +756,33 @@ void pagetable_init()
     // tmp指向页全局目录中的内核的页表项，该页表项保存内核的页上级目录地址
     tmp = (uint64_t *)(((uint64_t)Phy_To_Virt((uint64_t)Global_CR3 & (~0xfffUL))) + 8 * 256);
 
-    //printf("1:%x\t\t\n", (uint64_t)tmp, *tmp);
+    // printf("1:%x\t\t\n", (uint64_t)tmp, *tmp);
 
     // 获取第1个页上级目录的基地址
     tmp = Phy_To_Virt(*tmp & (~0xfffUL));
 
-    //printf("2:%x\t\t\n", (uint64_t)tmp, *tmp);
+    // printf("2:%x\t\t\n", (uint64_t)tmp, *tmp);
 
     // 获取第1个页中级目录的基地址
     tmp = Phy_To_Virt(*tmp & (~0xfffUL));
 
-    //printf("3:%x\t\t\n", (uint64_t)tmp, *tmp);
+    // printf("3:%x\t\t\n", (uint64_t)tmp, *tmp);
 
-    for (i = 0; i < memory_management_struct.zones_size; i++)
+    for (int i = 0; i < memory_management_struct.zones_size; i++)
     {
         struct Zone *z = memory_management_struct.zones_struct + i;
         struct Page *p = z->pages_group;
 
         if (ZONE_UNMAPED_INDEX && i == ZONE_UNMAPED_INDEX)
-            break;
-
-        for (j = 0; j < z->pages_length; j++, p++);
         {
+            break;
+        }
+
+        // 这里出现了很奇怪的bug，似乎程序陷入了死循环，或者说导致了打印错误的bug，不知道为什么
+        // 关于内核页表的映射，原先我们已经做了手动映射，因此这里先不管这个bug，后面再解决
+        for (int j = 0; j < z->pages_length; j++, p++)
+        {
+            printf("j %d z->pages_length %d\t\t", j, z->pages_length);
             // tmp指向页全局目录中的表项，表项和物理页的物理基地址有关
             tmp = (uint64_t *)(((uint64_t)Phy_To_Virt((uint64_t)Global_CR3 & (~0xfffUL))) + (((uint64_t)Phy_To_Virt(p->PHY_address) >> PAGE_GDT_SHIFT) & 0x1ff) * 8);
 
@@ -806,4 +808,56 @@ void pagetable_init()
         }
     }
     flush_tlb();
+}
+
+// 初始化内存池
+// 因为内核只有一个进程，因此我们让内核的地址空间所需要使用的位图，直接复用内核物理内存池的位图，这样的设计看看以后是否有bug
+// 对于用户进程，因为会有多个用户进程，因此用户进程的地址空间所用的位图也需要多个，到时候动态申请空间来作为位图
+void init_memory_pool()
+{
+    // 内核可用的物理页数量，向上对64取整
+    uint64_t kernel_pages = (memory_management_struct.pages_size / 2 + 63) & (~(sizeof(long) - 1));
+
+    uint64_t user_free_pages = memory_management_struct.pages_size - kernel_pages;
+
+    // 内核内存池的位图
+    kernel_pool.pool_bitmap.bits = memory_management_struct.bits_map;
+    kernel_pool.pool_bitmap.length = kernel_pages / 8;
+
+    // 用户内存池的位图
+    user_pool.pool_bitmap.bits = kernel_pool.pool_bitmap.bits + (kernel_pages / 64);
+    user_pool.pool_bitmap.length = memory_management_struct.bits_length - kernel_pool.pool_bitmap.length;
+
+    // 内核的虚拟地址
+    kernel_vaddr.vaddr_bitmap.bits = kernel_pool.pool_bitmap.bits;
+    kernel_vaddr.vaddr_bitmap.length = kernel_pool.pool_bitmap.length;
+    kernel_vaddr.vaddr_start = KERNEL_START;
+}
+
+// 申请内存页
+void *get_vaddr(enum pool_flag pf, uint64_t pg_cnt, uint64_t page_flags)
+{
+    uint64_t vaddr_start = 0;
+    int bit_idx_start = -1;
+    if (pf == PF_KERNEL)
+    {
+        bit_idx_start = bitmap_scan(&kernel_vaddr.vaddr_bitmap, pg_cnt);
+        if (bit_idx_start == -1)
+        {
+            return NULL;
+        }
+        for (int i = 0; i < pg_cnt; i++)
+        {
+            bitmap_set(&kernel_vaddr.vaddr_bitmap, bit_idx_start + i, 1);
+            struct Page *page = memory_management_struct.pages_struct + bit_idx_start + i;
+            page_init(page, page_flags);
+        }
+        vaddr_start = kernel_vaddr.vaddr_start + bit_idx_start * PAGE_2M_SIZE;
+    }
+    else
+    {
+        // 用户的后面再完成
+    }
+
+    return (void *)vaddr_start;
 }
