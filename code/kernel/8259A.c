@@ -20,7 +20,7 @@ void pic_8259A_init()
 
     // 写入OCW1命令，用于操作中断屏蔽寄存器
     // 允许时钟（IRQ0）、键盘（IRQ1）、级联（IRQ2）、鼠标（IRQ12）、硬盘（IRQ14）
-    outb(PIC_M_DATA, 0xF8); // 1111 1000
+    outb(PIC_M_DATA, 0xF9); // 1111 1000
     outb(PIC_S_DATA, 0xAF); // 1010 1111
 
     sti();

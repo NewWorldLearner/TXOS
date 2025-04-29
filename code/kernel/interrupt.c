@@ -86,9 +86,9 @@ void do_bounds(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 }
 
 // 6
-void do_undefined_code(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
+void do_undefined_code(struct pt_regs *rsp, uint8_t vec_no, uint32_t error_code)
 {
-    printf("undefined_code error\n");
+    printf("undefined_code error %x\n", rsp->rip);
     while (1)
         ;
 }
