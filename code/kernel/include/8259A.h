@@ -9,4 +9,10 @@
 
 void pic_8259A_init();
 
+void pic_8259A_enable(uint64_t irq);
+void pic_8259A_disable(uint64_t irq);
+uint64_t pic_8259A_install(uint64_t irq, void *arg);
+void pic_8259A_uninstall(uint64_t irq);
+void pic_8259A_ack(uint64_t irq);
+
 #endif

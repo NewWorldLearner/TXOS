@@ -37,8 +37,8 @@ irq_desc_T interrupt_desc[24] = {0};
 //                    下面是中断向量的处理函数
 /////////////////////////////////////////////////////////////////////////////
 
-    // 0
-    void do_div_zero_error(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
+// 0
+void do_div_zero_error(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 {
     printf("div zero error\n");
     while (1)
@@ -302,10 +302,10 @@ static void idt_func_table_init()
     idt_func_table[20] = do_virtualization_exception;
     // 21-31号中断是intel保留未使用的
     // 32-55作为外部中断，中断处理函数统一为do_IRQ，然后在该函数中根据中断向量号来调用具体的中断处理函数
-    // for (int i = 32; i <56; i++)
-    // {
-    //     idt_func_table[i] = do_IRQ;
-    // }
+    for (int i = 32; i <56; i++)
+    {
+        idt_func_table[i] = do_IRQ;
+    }
 }
 
 // 完成有关中断的所有初始化工作

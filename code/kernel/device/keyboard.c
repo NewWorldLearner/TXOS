@@ -3,6 +3,12 @@
 #include "../include/io.h"
 #include "../include/print_kernel.h"
 
+#if APIC
+#include "../include/APIC.h"
+#else
+#include "../include/8259A.h"
+#endif
+
 // 下面这些字符显示不出来
 #define esc '\033' // 八进制表示字符,也可以用十六进制'\x1b'
 #define backspace '\b'
@@ -191,13 +197,10 @@ static inline char handle_key_press(uint16_t scancode)
 }
 
 // 键盘中断处理程序
-void keyboard_handler(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
+void keyboard_handler(uint64_t irq, uint64_t parameter, struct pt_regs *regs)
 {
     // 从8042的输出缓冲区读取一个字节
     uint16_t scancode = inb(0x60);
-
-    // 发送EOI到8259A主芯片
-    outb(0x20, 0x20);
 
     // 如果是扩展码的第1个字节，将标志位打开即处理完毕
     if (scancode == 0xe0)
@@ -225,10 +228,23 @@ void keyboard_handler(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 
     if (cur_char > 0)
     {
-        printf("%c",cur_char);
+        printf("%c", cur_char);
     }
-
 }
+
+
+hw_int_controller keyboard_int_controller =
+{
+#if APIC
+
+#else
+    .enable = pic_8259A_enable,
+    .disable = pic_8259A_disable,
+    .install = pic_8259A_install,
+    .uninstall = pic_8259A_uninstall,
+    .ack = pic_8259A_ack,
+#endif
+};
 
 // 键盘初始化
 void keyboard_init()
@@ -238,8 +254,12 @@ void keyboard_init()
 
     // 理论上我们还应该配置键盘的，比如配置将扫描码转换为第1套扫描码，不配置的话在默认情况下也能够满足我们的使用要求
 
+    // 键盘中断需要将按键输入保存在一个缓冲区中，这个缓冲区可以通过中断函数的参数传入，也可以定义一个全局变量来作为缓冲区
+    // 这里我们先不管键盘输入，等待后续实现shell命令的时候再说
+     register_irq(33, NULL, keyboard_handler, 0, &keyboard_int_controller, "ps/2 keyboard");
+
     // 这里我们还是简单使用8259A作为中断代理
-    idt_func_table[33] = keyboard_handler;
+    // idt_func_table[33] = keyboard_handler;
 
     printf("keyboard init done\n");
 }
