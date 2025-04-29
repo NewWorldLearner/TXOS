@@ -43,7 +43,6 @@ intr%1entry:		 ; 每个中断处理程序都要压入中断向量号,所以一�
 
    mov rdi, rsp;                  ;将rsp的值传递给中断处理函数，中断处理函数通过[rsp+ 18 * 8]就可以知道发生中断时压入的rip地址了，因此就可以修改该值
    mov rsi, %1;                   ;%1是一个宏，表示的是中断向量号，将中断向量号传递给中断处理函数
-   mov rdx, [rsp + 17 *8];        ;将压入的错误码传参给中断处理函数
    lea rax, [rel idt_func_table]  ;这里不使用call [idt_func_table + %1*8]来直接调用，原因似乎是nasm会使用32位地址来访问idt_func_table，导致错误
    call [rax + %1*8]              ;调用idt_func_table中的C版本中断处理函数，注意偏移量要乘以8
 

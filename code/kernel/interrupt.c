@@ -38,7 +38,7 @@ irq_desc_T interrupt_desc[24] = {0};
 /////////////////////////////////////////////////////////////////////////////
 
 // 0
-void do_div_zero_error(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
+void do_div_zero_error(struct pt_regs *regs, uint64_t irq)
 {
     printf("div zero error\n");
     while (1)
@@ -46,7 +46,7 @@ void do_div_zero_error(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 }
 
 // 1
-void do_debug(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
+void do_debug(struct pt_regs *regs, uint64_t irq)
 {
     printf("debug error\n");
     while (1)
@@ -54,7 +54,7 @@ void do_debug(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 }
 
 // 2
-void do_nmi(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
+void do_nmi(struct pt_regs *regs, uint64_t irq)
 {
     printf("nmi error\n");
     while (1)
@@ -62,7 +62,7 @@ void do_nmi(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 }
 
 // 3
-void do_int3(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
+void do_int3(struct pt_regs *regs, uint64_t irq)
 {
     printf("int3 error\n");
     while (1)
@@ -70,7 +70,7 @@ void do_int3(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 }
 
 // 4
-void do_overflow(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
+void do_overflow(struct pt_regs *regs, uint64_t irq)
 {
     printf("overflow error\n");
     while (1)
@@ -78,7 +78,7 @@ void do_overflow(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 }
 
 // 5
-void do_bounds(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
+void do_bounds(struct pt_regs *regs, uint64_t irq)
 {
     printf("bounds error\n");
     while (1)
@@ -86,15 +86,15 @@ void do_bounds(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 }
 
 // 6
-void do_undefined_code(struct pt_regs *rsp, uint8_t vec_no, uint32_t error_code)
+void do_undefined_code(struct pt_regs *regs, uint64_t irq)
 {
-    printf("undefined_code error %x\n", rsp->rip);
+    printf("undefined_code error %x\n", regs->rip);
     while (1)
         ;
 }
 
 // 7
-void do_device_not_available(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
+void do_device_not_available(struct pt_regs *regs, uint64_t irq)
 {
     printf("device_not_available error\n");
     while (1)
@@ -102,7 +102,7 @@ void do_device_not_available(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 }
 
 // 8
-void do_double_fault(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
+void do_double_fault(struct pt_regs *regs, uint64_t irq)
 {
     printf("double error\n");
     while (1)
@@ -110,7 +110,7 @@ void do_double_fault(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 }
 
 // 9
-void do_coprocessor_segment_overrun(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
+void do_coprocessor_segment_overrun(struct pt_regs *regs, uint64_t irq)
 {
     printf("coprocessor_segment_overrun\n");
     while (1)
@@ -118,7 +118,7 @@ void do_coprocessor_segment_overrun(uint64_t rsp, uint8_t vec_no, uint32_t error
 }
 
 // 10
-void do_invalid_TSS(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
+void do_invalid_TSS(struct pt_regs *regs, uint64_t irq)
 {
     printf("invalid TSS error\n");
     while (1)
@@ -126,7 +126,7 @@ void do_invalid_TSS(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 }
 
 // 11
-void do_segment_not_present(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
+void do_segment_not_present(struct pt_regs *regs, uint64_t irq)
 {
     printf("segment_not_present error\n");
     while (1)
@@ -134,7 +134,7 @@ void do_segment_not_present(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 }
 
 // 12
-void do_stack_segment_fault(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
+void do_stack_segment_fault(struct pt_regs *regs, uint64_t irq)
 {
     printf("stack_segment_fault\n");
     while (1)
@@ -142,15 +142,15 @@ void do_stack_segment_fault(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 }
 
 // 13
-void do_general_protection(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
+void do_general_protection(struct pt_regs *regs, uint64_t irq)
 {
-    printf("do_general_protection, error code 0x%x\n", error_code);
+    printf("do_general_protection, error code 0x%x\n", regs->errcode);
     while (1)
         ;
 }
 
 // 14
-void do_page_fault(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
+void do_page_fault(struct pt_regs *regs, uint64_t irq)
 {
     printf("do_page_fault\n");
     while (1)
@@ -160,7 +160,7 @@ void do_page_fault(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 // 15号异常保留不用
 
 // 16
-void do_x87_FPU_error(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
+void do_x87_FPU_error(struct pt_regs *regs, uint64_t irq)
 {
     printf("do_x87_FPU_error\n");
     while (1)
@@ -168,7 +168,7 @@ void do_x87_FPU_error(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 }
 
 // 17
-void do_alignment_check(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
+void do_alignment_check(struct pt_regs *regs, uint64_t irq)
 {
     printf("do_alignment_check\n");
     while (1)
@@ -176,7 +176,7 @@ void do_alignment_check(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 }
 
 // 18
-void do_machine_check(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
+void do_machine_check(struct pt_regs *regs, uint64_t irq)
 {
     printf("do_machine_check\n");
     while (1)
@@ -184,7 +184,7 @@ void do_machine_check(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 }
 
 // 19
-void do_SIMD_exception(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
+void do_SIMD_exception(struct pt_regs *regs, uint64_t irq)
 {
     printf("do_SIMD_exception\n");
     while (1)
@@ -192,7 +192,7 @@ void do_SIMD_exception(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
 }
 
 // 20
-void do_virtualization_exception(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
+void do_virtualization_exception(struct pt_regs *regs, uint64_t irq)
 {
     printf("do_virtualization_exception\n");
     while (1)
@@ -202,10 +202,10 @@ void do_virtualization_exception(uint64_t rsp, uint8_t vec_no, uint32_t error_co
 // 21-31号是intel保留未使用的，32-255用户自定义使用
 
 // 通用的中断处理函数,一般用在异常出现时的处理
-static void general_intr_handler(uint64_t rsp, uint8_t vec_no, uint32_t error_code)
+static void general_intr_handler(struct pt_regs *regs, uint64_t irq)
 {
     // 后面再具体设计中断处理函数的形式吧
-    printf("interrupt to do: interrupt number %d\n",vec_no);
+    printf("interrupt to do: interrupt number %d\n",irq);
     // 发送中断结束命令
     outb(0x20, 0x20);
     outb(0xa0, 0x20);
@@ -230,19 +230,6 @@ void do_IRQ(struct pt_regs *regs, uint64_t nr)
     }
 }
 
-// 键盘使用的是8042芯片，它的数据端口是0x60，数据长度是8位
-// 必须要将数据端口中的数据读取完毕之后才能触发下次键盘中断
-// 0x64端口是状态寄存器和控制寄存器,因此该端口可读可写，读和写该端口的含义不一样
-void do_keyboard(uint64_t rsp, uint32_t error_code)
-{
-    // 读取键盘扫描码
-    uint8_t scancode = inb(0x60);
-
-    // 发送EOI到8259A主芯片
-    outb(0x20, 0x20);
-
-    printf("Keyboard scancode: 0x%x\n", scancode);
-}
 
 ////////////////////////////////////////////////////////////////
 //               以上是中断向量的处理函数
@@ -321,7 +308,7 @@ void idt_init()
 // 其实就是给中断控制结构体irq_desc_T赋值，然后调用install函数和enable函数
 int register_irq(uint64_t irq,
                  void *arg,
-                 void (*handler)(uint64_t nr, uint64_t parameter, struct pt_regs *regs),
+                 void (*handler)(uint64_t irq, uint64_t parameter, struct pt_regs *regs),
                  uint64_t parameter,
                  hw_int_controller *controller,
                  char *irq_name)
