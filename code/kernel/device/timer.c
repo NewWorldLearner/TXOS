@@ -3,18 +3,36 @@
 #include "../include/print_kernel.h"
 #include "../include/interrupt.h"
 
-#define IRQ0_FREQUENCY 10
+#if APIC
+#include "../include/APIC.h"
+#else
+#include "../include/8259A.h"
+#endif
+
+// 注意到计数器初值占16位，最大值为65535，频率设置过高（比如100）会导致bochs虚拟机的打印出现问题，还是代码存在bug呢？
+#define IRQ0_FREQUENCY 35
 #define INPUT_FREQUENCY 1193180
 #define COUNTER0_VALUE (INPUT_FREQUENCY / IRQ0_FREQUENCY)
 
-extern intr_handler idt_func_table[256];
+volatile uint64_t jiffies = 0;
 
 void timer_handler()
 {
-    static int i = 0;
-    printf("time interrupt: %d\n", i++);
-    outb(0x20, 0x20);
+    jiffies++;
 }
+
+hw_int_controller timer_int_controller =
+{
+#if APIC
+
+#else
+        .enable = pic_8259A_enable,
+        .disable = pic_8259A_disable,
+        .install = pic_8259A_install,
+        .uninstall = pic_8259A_uninstall,
+        .ack = pic_8259A_ack,
+#endif
+};
 
 // 使用8253来作为计数器
 void timer_init()
@@ -25,7 +43,7 @@ void timer_init()
     outb(0x40, (uint8_t)COUNTER0_VALUE);
     outb(0x40, (uint8_t)(COUNTER0_VALUE >> 8));
 
-    idt_func_table[32] = timer_handler;
-    int i = 0;
-    printf("tomer init done.\n");
+    register_irq(32, NULL, timer_handler, 0, &timer_int_controller, "timer");
+
+    printf("timer init done.\n");
 }

@@ -50,7 +50,7 @@ void Start_Kernel(void)
 	// IDE_transfer(ATA_READ_CMD,0,1,buff);
 	// printf("LBA 0 sector:%s\n",buff);
 
-	//timer_init();
+	timer_init();
 
 	// kernel_process_init();
 
