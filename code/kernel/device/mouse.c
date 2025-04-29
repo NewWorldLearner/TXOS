@@ -3,6 +3,12 @@
 #include "../include/print_kernel.h"
 #include "../include/io.h"
 
+#if APIC
+#include "../include/APIC.h"
+#else
+#include "../include/8259A.h"
+#endif
+
 extern intr_handler idt_func_table[256];
 
 // 等待输入缓冲区空闲
@@ -44,10 +50,6 @@ void mouse_handler()
     static uint8_t packet[3]; // 鼠标数据包（3字节）
     static uint8_t phase = 0; // 数据包阶段
 
-    // 发送中断结束命令
-    outb(0xa0, 0x20);
-    outb(0x20, 0x20);
-
     uint8_t data = inb(0x60); // 读取鼠标数据
 
     // 判断数据包起始（Byte1的Bit3=1）
@@ -70,6 +72,18 @@ void mouse_handler()
 
 }
 
+hw_int_controller mouse_int_controller =
+    {
+#if APIC
+
+#else
+        .enable = pic_8259A_enable,
+        .disable = pic_8259A_disable,
+        .install = pic_8259A_install,
+        .uninstall = pic_8259A_uninstall,
+        .ack = pic_8259A_ack,
+#endif
+};
 
 void mouse_init()
 {
@@ -90,6 +104,7 @@ void mouse_init()
     wait_keyboard_ready();
     outb(0x60, 0xF4); // 0xF4: 启用数据流模式
 
-    idt_func_table[44] = mouse_handler;
+    register_irq(44, NULL, mouse_handler, 0, &mouse_int_controller, "ps/2 mouse");
+
     printf("mouse init done\n");
 }

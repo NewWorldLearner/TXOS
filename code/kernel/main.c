@@ -42,7 +42,7 @@ void Start_Kernel(void)
 
 	keyboard_init();
 
-	// mouse_init();
+	mouse_init();
 
 	// disk_init();
 
