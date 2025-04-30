@@ -9,13 +9,12 @@
 #include "include/thread.h"
 
 #if APIC
-	#include "include/APIC.h"
+#include "include/APIC.h"
 #else
-	#include "include/8259A.h"
+#include "include/8259A.h"
 #endif
 
 extern struct Global_Memory_Descriptor memory_management_struct;
-
 
 uint64_t init(uint64_t arg)
 {
@@ -28,17 +27,17 @@ uint64_t init(uint64_t arg)
 
 void Start_Kernel(void)
 {
-    init_screen();
+	init_screen();
 	init_memory();
 	idt_init();
 	// init_memory_slab();
 	// pagetable_init();
 
-	#if APIC
-		LAPIC_IOAPIC_init();
-	#else
-		pic_8259A_init();
-	#endif
+#if APIC
+	LAPIC_IOAPIC_init();
+#else
+	pic_8259A_init();
+#endif
 
 	keyboard_init();
 
@@ -50,16 +49,21 @@ void Start_Kernel(void)
 	// IDE_transfer(ATA_READ_CMD,0,1,buff);
 	// printf("LBA 0 sector:%s\n",buff);
 
-	timer_init();
+	// timer_init();
 
-	// kernel_process_init();
+	kernel_process_init();
 
-	// thread_create(init, 0);
+	thread_create(init, 0);
+
+	schedule();
 
 
-	init_memory_pool();
-	uint64_t vaddr = (uint64_t)get_vaddr(PF_KERNEL, 1, PG_Kernel);
-	printf("kernel vaddr:0x%x", vaddr);
+	// init_memory_pool();
+	// uint64_t vaddr = (uint64_t)get_vaddr(PF_KERNEL, 1, PG_Kernel);
+	// // struct Page *p = alloc_pages(ZONE_NORMAL, 1, PG_Kernel);
+	// // uint64_t vaddr = Phy_To_Virt(p->PHY_address);
+	// printf("kernel vaddr:0x%x\n", vaddr);
+
 
 	while (1)
 		;

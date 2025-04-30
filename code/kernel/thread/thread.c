@@ -14,7 +14,6 @@ void init_pcb_task(struct task_struct *task, uint64_t priority, uint64_t tickets
     task->regs = (struct pt_regs *)((uint64_t)task + STACK_SIZE - sizeof(struct pt_regs));
     task->status = TASK_READY;
     task->flag = KERNEL_TASK;
-    task->vaddr = 0xffff800000000000; // 内核地址
     task->pid = 0;
     task->priority = priority;
     task->tickets = tickets;
@@ -92,8 +91,8 @@ __asm__(
     "	popq	%r12	\n\t"
     "	popq	%r11	\n\t"
     "	popq	%r10	\n\t"
-    "	popq	%r9	\n\t"
-    "	popq	%r8	\n\t"
+    "	popq	%r9	    \n\t"
+    "	popq	%r8	    \n\t"
     "	popq	%rbx	\n\t"
     "	popq	%rcx	\n\t"
     "	popq	%rdx	\n\t"
@@ -117,30 +116,49 @@ __asm__(
 
 // 创建线程其实就是创建一块PCB并初始化
 // 在执行线程函数之前，首先执行一段引导程序，在执行完线程函数之后，再执行一段退出程序
+// 理论上来说，mm、thread、tss结构体是应该动态申请内存的，但是kmalloc相关的函数似乎还存在bug，所以后续再修改
 int thread_create(uint64_t (*function)(uint64_t), uint64_t arg)
 {
+    struct task_struct *task = kmalloc(SIZE_32K, PG_Kernel);
 
-    struct Page *p = alloc_pages(ZONE_NORMAL, 1, PG_PTable_Maped | PG_Kernel);
+    // 复制task_struct结构体
+    *task = *current;
+    // 接下来初始化一些特异化信息，与被复制的线程的信息不同
+    list_insert_before(&(current->list), &(task->list));
+    task->tid++;
+    task->priority = 10;
+    task->tickets = 10;
 
-    struct task_struct *task = (struct task_struct *)Phy_To_Virt(p->PHY_address);
+    // 复制thread_struct结构体，再进行初始化
+    struct thread_struct *thread = (struct thread_struct *)(task + 1);
+    task->thread = thread;
+    memcpy(thread, current->thread, sizeof(struct thread_struct));
+    thread->rsp0 = (uint64_t)task + STACK_SIZE;
+    thread->rsp = thread->rsp0 - sizeof(struct pt_regs);
+    thread->rip = (uint64_t)kernel_thread_func;
 
-    // 初始化task_struct
-    init_pcb_task(task, 10, 10);
+    // 复制mm_struct结构体，mm中保存的页表肯定是要复制的，其它的暂时不重要
+    task->mm = (struct mm_struct *)(task->thread + 1);
+    *(task->mm) = *(current->mm);
 
-    // 初始化regs
-    init_pcb_regs(task->regs, function, arg);
-
-    task->regs->rip = (uint64_t)kernel_thread_func;
-
-    // 初始化thread_struct
-    init_pcb_thread(task);
-
-    // 初始化mm_struct
-    init_pcb_mm(task->mm);
-
-    // 初始化tss_struct
+    // 初始化tss，tss应该是互不相同的，tss中保存的值与pcb有关，因此tss无需复制
+    task->tss = (struct tss_struct *)(task->mm + 1);
     init_pcb_tss(task);
 
+    // 初始化regs，因为线程可能是内核线程或者用户线程，但目前来说，它还属于内核线程
+    task->regs = thread->rsp;
+
+    task->regs->rbx = (uint64_t)function;
+    task->regs->rdx = (uint64_t)arg;
+    task->regs->rsp = thread->rsp;
+    task->regs->rip = thread->rip;
+    task->regs->rflags = (1 << 9); // 允许中断
+
+    task->regs->cs = KERNEL_CS;
+    task->regs->ds = KERNEL_DS;
+    task->regs->es = KERNEL_DS;
+    task->regs->ss = KERNEL_DS;
+    return 1;
 }
 
 

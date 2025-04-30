@@ -32,7 +32,7 @@ inline static void init_kernel_task()
     task->flag = KERNEL_TASK;
     task->mm = &kernel_mm;
     task->thread = &kernel_thread;
-    task->vaddr = 0xffff800000000000;
+    task->vaddr.vaddr_start = 0xffff800000000000;
     task->pid = 0;
     task->priority = 0;
     task->tickets = 10;

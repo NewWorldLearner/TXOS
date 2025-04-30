@@ -418,8 +418,8 @@ static void init_slab_cache(struct Slab_cache *slab_cache, uint64_t block_size)
     // 把Slab_cache指向的Slab放在内存管理单元的末尾
     slab_cache->cache_pool = (struct Slab *)memory_management_struct.end_of_struct;
 
-    // 更新内存管理单元的末尾
-    memory_management_struct.end_of_struct = memory_management_struct.end_of_struct + sizeof(struct Slab) + sizeof(long) * 10;
+    // 更新内存管理单元的末尾，进行8字节对齐
+    memory_management_struct.end_of_struct = (memory_management_struct.end_of_struct + sizeof(struct Slab) + 7) & (~(sizeof(long) - 1));
     // ------------------------初始化slab------------------
     list_init(&(slab_cache->cache_pool->list));
 
@@ -432,11 +432,11 @@ static void init_slab_cache(struct Slab_cache *slab_cache, uint64_t block_size)
     slab_cache->cache_pool->color_map = (uint64_t *)memory_management_struct.end_of_struct;
 
     // 更新位图管理单元的结束位置，进行8字节对齐
-    memory_management_struct.end_of_struct = (uint64_t)(memory_management_struct.end_of_struct + slab_cache->cache_pool->color_length + sizeof(long) * 10) & (~(sizeof(long) - 1));
+    memory_management_struct.end_of_struct = (uint64_t)(memory_management_struct.end_of_struct + slab_cache->cache_pool->color_length + 8) & (~(sizeof(long) - 1));
     // 将位图中的位全部置1
     memset(slab_cache->cache_pool->color_map, 0xFF, slab_cache->cache_pool->color_length);
     // 将可用的内存块对应的位设为0
-    // 这段代码有问题
+    // 这段代码有问题？？？
     for (int i = 0; i < slab_cache->cache_pool->color_count; i++)
     {
         *(slab_cache->cache_pool->color_map + (i >> 6)) ^= 1UL << (i % 64);
@@ -474,6 +474,7 @@ uint64_t init_memory_slab()
     for (int i = 0; i < 16; i++)
     {
         init_slab_cache(&kmalloc_cache_size[i], kmalloc_cache_size[i].size);
+
     }
     // ---------------------接下来对于所有slab占用的物理页进行置位标记------------------
     uint64_t end_address = Virt_To_Phy(memory_management_struct.end_of_struct);
@@ -851,6 +852,8 @@ void *get_vaddr(enum pool_flag pf, uint64_t pg_cnt, uint64_t page_flags)
             bitmap_set(&kernel_vaddr.vaddr_bitmap, bit_idx_start + i, 1);
             struct Page *page = memory_management_struct.pages_struct + bit_idx_start + i;
             page_init(page, page_flags);
+            page->zone_struct->page_using_count++;
+            page->zone_struct->page_free_count--;
         }
         vaddr_start = kernel_vaddr.vaddr_start + bit_idx_start * PAGE_2M_SIZE;
     }
