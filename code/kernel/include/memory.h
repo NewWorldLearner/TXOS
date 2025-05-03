@@ -294,6 +294,13 @@ enum pool_flag
 void init_memory_pool();
 void *get_vaddr(enum pool_flag pf, uint64_t pg_cnt, uint64_t page_flags);
 
+uint64_t *get_pgde(uint64_t vaddr);
+uint64_t *get_pude(uint64_t vaddr);
+uint64_t *get_pmde(uint64_t vaddr);
+uint64_t *get_pte(uint64_t vaddr);
+void pagetable_add(uint64_t vaddr, uint64_t page_phyaddr);
+uint64_t addr_v2p(uint32_t vaddr);
+
 #endif
 
 

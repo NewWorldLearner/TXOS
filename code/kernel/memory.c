@@ -864,3 +864,100 @@ void *get_vaddr(enum pool_flag pf, uint64_t pg_cnt, uint64_t page_flags)
 
     return (void *)vaddr_start;
 }
+
+// 传入一个线性地址，返回该线性地址对应的页全局目录项的线性地址
+// 这里一定需要注意，页全局目录的最后一个目录项，它的某位表示是否开启大页，该位一定要是0，表示我们使用4KB的物理页
+uint64_t *get_pgde(uint64_t vaddr)
+{
+
+    // 取线性地址的47-39位乘以8得到在该线性地址对应的页全局目录项在页全局目录中的偏移量
+    uint64_t pgde_index = (vaddr >> 39) & 0x1ff;
+
+    // 理想很丰满，现实很骨感，我们构建出来的地址只有48位，不过幸好我们可以确认的是，页全局目录保存的是在内核空间，因此高16位一定是16个1，因此pgde的实际值如下
+    // uint64_t *pgde = (uint64_t *)((uint64_t)0xfffffffff000 + pgde_index * 8 + ((uint64_t)0xffff << 48));
+    uint64_t *pgde = (uint64_t *)(0xfffffffffffff000 + (pgde_index * 8));
+    printf("vaddr: 0x%x  pgde_index:0x%x  pgde:0x%x\n", vaddr, pgde_index, pgde);
+    return pgde;
+}
+
+// 传入一个线性地址，返回该线性地址对应的上级目录项的线性地址
+uint64_t *get_pude(uint64_t vaddr)
+{
+    // 我们想获取的是线性地址对应的页上级目录中的目录项的线性地址，那就需要把页上级目录项的索引转换为在物理页中的偏移量
+    uint64_t pude_index = (vaddr >> 30) & 0x1ff;
+    uint64_t pgde_index = (vaddr >> 39) & 0x1ff;
+    // 我们这里使用的是4KB物理页，我们希望经过3次地址转换后访问到的依然是页全局目录，经过第4次转换后访问到的是页上级目录
+    // 于是将线性地址进行分解，前3次分解出来的索引都是0x1ff，第4次分解出来的索引应该是pgde_index（第5次分解出来的就是页内偏移量了）
+
+    uint64_t *pude = (uint64_t*)((uint64_t)0xffffffffffe00000 + (pgde_index << 12) + pude_index * 8);
+    printf("vaddr: 0x%x  pgde_index:0x%x  pude_index:0x%x     pude:0x%x\n", vaddr, pgde_index, pude_index, pude);
+    return pude;
+}
+
+// 传入一个线性地址，返回该线性地址对应的中级目录项的线性地址
+uint64_t *get_pmde(uint64_t vaddr)
+{
+    uint64_t pmde_index = (vaddr >> 21) & 0x1ff;
+    uint64_t pude_index = (vaddr >> 30) & 0x1ff;
+    uint64_t pgde_index = (vaddr >> 39) & 0x1ff;
+    // 我们希望倒推一下，我们希望第4次地址转换后访问到的是页中级目录，那么第3次地址转换后访问到的是页上级目录，那么前2次地址转换访问到的是页全局目录
+    // 于是将线性地址进行分解，前2次分解出来的索引都是0x1ff，第3次分解出来的索引是pgde_index，第4次分解出的索引是pude_index
+    uint64_t *pmde = (uint64_t *)((uint64_t)0xffffffffc0000000 + (pgde_index << 21) + (pude_index << 12) + pmde_index * 8);
+    return pmde;
+}
+
+
+uint64_t *get_pte(uint64_t vaddr)
+{
+    uint64_t pte_index = (vaddr >> 12) & 0x1ff;
+    uint64_t pmde_index = (vaddr >> 21) & 0x1ff;
+    uint64_t pude_index = (vaddr >> 30) & 0x1ff;
+    uint64_t pgde_index = (vaddr >> 39) & 0x1ff;
+    // 我们希望倒推一下，我们希望第4次地址转换访问到的是页表，那么第3次地址转换访问到的是页中级目录，那么第2次地址转换访问到的是上级目录，第1次地址转换后访问的是页全局目录
+    // 于是将线性地址进行分解，第1次分解出来的索引是0x1ff，第2次分解出来的索引是pude_index，第3次分解出来的索引是pmde_index，第4次分解出来的索引是pte_index
+    uint64_t *pte = (uint64_t *)((uint64_t)0xffffff8000000000 + (pgde_index << 30) + (pude_index << 21) + (pmde_index << 12) + pte_index * 8);
+
+    return pte;
+}
+
+
+// 进行2MB的物理页映射
+void pagetable_add(uint64_t vaddr, uint64_t page_phyaddr)
+{
+    uint64_t *pgde = get_pgde(vaddr);
+    uint64_t *pude = get_pude(vaddr);
+    uint64_t *pmde = get_pmde(vaddr);
+    // 目录项的位0为1时表示该目录项存在，如果pgde不存在，那么就要申请4KB的内存作为页上级目录
+    if (!((*pgde) & 0x01))
+    {
+        uint64_t page_up_dir_phyaddr = Virt_To_Phy(kmalloc(SIZE_4K, PG_Kernel));
+        *pgde = page_up_dir_phyaddr | PAGE_USER_Dir;
+        // 将页上级目录页面清空，避免残留数据被当作页上级目录项
+        memset((uint64_t)pude & (~0xff), 0x00, SIZE_4K);
+    }
+
+    if (!((*pude) & 0x01))
+    {
+        uint64_t page_mid_dir_phyaddr = Virt_To_Phy(kmalloc(SIZE_4K, PG_Kernel));
+        *pmde = page_mid_dir_phyaddr | PAGE_USER_Dir;
+        memset((uint64_t)pmde & (~0xff), 0x00, SIZE_4K);
+    }
+
+    // 断言pmde并不存在
+    ASSERT(!((*pmde) & 0x01));
+
+    *pmde = page_phyaddr | PAGE_USER_Page;
+}
+
+// 假设进行的2MB物理页映射
+uint64_t addr_v2p(uint32_t vaddr)
+{
+    uint64_t *pmde = get_pmde(vaddr);
+
+    // 断言pmde一定存在
+    ASSERT((*pmde) &0x01);
+
+    uint64_t phyaddr = (*pmde) & (~0x1fffff) + (vaddr & 0x1fffff);
+
+    return phyaddr;
+}
