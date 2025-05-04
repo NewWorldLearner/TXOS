@@ -876,7 +876,6 @@ uint64_t *get_pgde(uint64_t vaddr)
     // 理想很丰满，现实很骨感，我们构建出来的地址只有48位，不过幸好我们可以确认的是，页全局目录保存的是在内核空间，因此高16位一定是16个1，因此pgde的实际值如下
     // uint64_t *pgde = (uint64_t *)((uint64_t)0xfffffffff000 + pgde_index * 8 + ((uint64_t)0xffff << 48));
     uint64_t *pgde = (uint64_t *)(0xfffffffffffff000 + (pgde_index * 8));
-    printf("vaddr: 0x%x  pgde_index:0x%x  pgde:0x%x\n", vaddr, pgde_index, pgde);
     return pgde;
 }
 
@@ -890,7 +889,6 @@ uint64_t *get_pude(uint64_t vaddr)
     // 于是将线性地址进行分解，前3次分解出来的索引都是0x1ff，第4次分解出来的索引应该是pgde_index（第5次分解出来的就是页内偏移量了）
 
     uint64_t *pude = (uint64_t*)((uint64_t)0xffffffffffe00000 + (pgde_index << 12) + pude_index * 8);
-    printf("vaddr: 0x%x  pgde_index:0x%x  pude_index:0x%x     pude:0x%x\n", vaddr, pgde_index, pude_index, pude);
     return pude;
 }
 
@@ -927,20 +925,23 @@ void pagetable_add(uint64_t vaddr, uint64_t page_phyaddr)
     uint64_t *pgde = get_pgde(vaddr);
     uint64_t *pude = get_pude(vaddr);
     uint64_t *pmde = get_pmde(vaddr);
+
     // 目录项的位0为1时表示该目录项存在，如果pgde不存在，那么就要申请4KB的内存作为页上级目录
     if (!((*pgde) & 0x01))
     {
         uint64_t page_up_dir_phyaddr = Virt_To_Phy(kmalloc(SIZE_4K, PG_Kernel));
         *pgde = page_up_dir_phyaddr | PAGE_USER_Dir;
         // 将页上级目录页面清空，避免残留数据被当作页上级目录项
-        memset((uint64_t)pude & (~0xff), 0x00, SIZE_4K);
+        memset((uint64_t*)((uint64_t)pude & (~0xfff)), 0x00, SIZE_4K);
     }
 
     if (!((*pude) & 0x01))
     {
         uint64_t page_mid_dir_phyaddr = Virt_To_Phy(kmalloc(SIZE_4K, PG_Kernel));
-        *pmde = page_mid_dir_phyaddr | PAGE_USER_Dir;
-        memset((uint64_t)pmde & (~0xff), 0x00, SIZE_4K);
+
+        *pude = page_mid_dir_phyaddr | PAGE_USER_Dir;
+
+        memset((uint64_t*)((uint64_t)pmde & (~0xfff)), 0x00, SIZE_4K);
     }
 
     // 断言pmde并不存在

@@ -123,7 +123,8 @@ int color_print_string(uint32_t FRcolor, uint32_t BKcolor, const char *str)
             Pos.XCharPosition++;
         }
 
-        if (Pos.XCharPosition >= (Pos.XResolution / Pos.XCharSize))
+        // bochs虚拟机的最后52列显示不出来，因此这里提前52列就换行
+        if (Pos.XCharPosition >= (Pos.XResolution / Pos.XCharSize) - 52)
         {
             Pos.YCharPosition++;
             Pos.XCharPosition = 0;

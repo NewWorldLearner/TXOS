@@ -10,6 +10,9 @@
 
 #define STACK_SIZE 32768
 
+#define SIZE_32K (1UL << 15)
+#define SIZE_4K (1UL << 12)
+
 // 进程的状态
 enum task_status
 {
@@ -35,7 +38,7 @@ enum task_flag
 struct mm_struct
 {
     pml4t_t *pgd; // page table point
-
+    uint64_t *page_dir;
     uint64_t start_code, end_code;
     uint64_t start_data, end_data;
     uint64_t start_rodata, end_rodata;
@@ -95,9 +98,11 @@ struct task_struct
     struct tss_struct *tss;                     // tss的地址
     struct pt_regs *regs;                       // regs的地址
 
-    uint64_t vaddr;                        // 程序的线性地址
+    struct virtual_addr vaddr;                  // 程序的线性地址
 
     int64_t pid;                                // 进程ID
+
+    int64_t tid;                               // 线程ID
 
     int64_t priority;                           // 进程优先级
 
@@ -124,17 +129,43 @@ static struct task_struct *get_current()
     "movq	%rsp,	%rbx	\n\t" \
     "andq	$-32768,%rbx	\n\t"
 
-extern unsigned int TSS64_Table[26];
+extern uint32_t TSS64_Table[26];
 
 
 void kernel_process_init();
 
-int thread_create(uint64_t (*function)(uint64_t), uint64_t arg);
+struct task_struct *thread_create(uint64_t (*function)(uint64_t*), uint64_t *arg);
 
 void set_tss64(struct tss_struct *tss);
 
 void switch_to(struct task_struct *cur, struct task_struct *next);
 
 void schedule();
+
+void init_pcb_task(struct task_struct *task, uint64_t priority, uint64_t tickets);
+
+void init_pcb_thread(struct task_struct *task);
+
+void init_pcb_mm(struct mm_struct *mm);
+
+void init_pcb_tss(struct task_struct *task);
+
+void init_pcb_regs(struct pt_regs *regs, uint64_t (*fn)(uint64_t), uint64_t arg);
+
+inline static uint64_t rdmsr(uint64_t address)
+{
+    uint32_t tmp0 = 0;
+    uint32_t tmp1 = 0;
+    __asm__ __volatile__("rdmsr	\n\t" : "=d"(tmp0), "=a"(tmp1) : "c"(address) : "memory");
+    return (uint64_t)tmp0 << 32 | tmp1;
+}
+
+inline static void wrmsr(uint64_t address, uint64_t value)
+{
+    __asm__ __volatile__("wrmsr	\n\t" ::"d"(value >> 32), "a"(value & 0xffffffff), "c"(address) : "memory");
+}
+
+extern void system_enter();
+extern void system_exit();
 
 #endif

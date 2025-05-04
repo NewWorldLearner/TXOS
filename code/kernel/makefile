@@ -7,9 +7,9 @@ all: system
 	objcopy -I elf64-x86-64 -S -R ".eh_frame" -R ".comment" -O binary system kernel.bin
 
 system:	head.o main.o print_kernel.o interrupt.o interrupt_entry.o string.o debug.o memory.o bitmap.o list.o pic.o keyboard.o mouse.o \
-	disk.o timer.o kernel_task.o thread.o
+	disk.o timer.o kernel_task.o thread.o process.o
 	ld -b elf64-x86-64 -o system head.o main.o interrupt.o interrupt_entry.o print_kernel.o string.o debug.o memory.o bitmap.o list.o \
-	pic.o keyboard.o mouse.o disk.o timer.o kernel_task.o thread.o \
+	pic.o keyboard.o mouse.o disk.o timer.o kernel_task.o thread.o process.o \
 	-T kernel.lds 
 
 main.o:	main.c
@@ -60,6 +60,9 @@ kernel_task.o: thread/kernel_task.c
 
 thread.o: thread/thread.c
 	gcc $(CFLAGS) -c thread/thread.c
+
+process.o: userprogram/process.c
+	gcc $(CFLAGS) -c userprogram/process.c
 
 memory.o: memory.c
 	gcc $(CFLAGS) -c memory.c

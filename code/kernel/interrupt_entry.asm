@@ -59,7 +59,6 @@ section .text
 global intr_exit
 intr_exit:	     
 ; 以下是恢复上下文环境
-   ;add esp, 8			   ; 跳过中断号
 
    pop rax
    mov ds,ax
@@ -143,3 +142,32 @@ VECTOR 0x35,ZERO	;保留
 VECTOR 0x36,ZERO	;保留
 VECTOR 0x37,ZERO	;保留
 
+
+global system_exit
+system_exit:
+   mov [rsp + 0x80], rax      ; 保存中断返回值
+   pop r15
+   pop r14
+   pop r13
+   pop r12
+   pop r11
+   pop r10
+   pop r9
+   pop r8
+   pop rbx
+   pop rcx
+   pop rdx
+   pop rsi
+   pop rdi
+   pop rbp
+   pop rax
+   mov ds, ax
+   pop rax
+   mov es, ax
+   pop rax
+   add rsp, 0x38
+   db 0x48                   ; sysexit指令的前缀
+   sysexit                   ; 返回用户态
+
+global system_enter
+system_enter:

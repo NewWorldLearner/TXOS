@@ -95,6 +95,10 @@ void kernel_process_init()
     // 值得注意的是，每个进程都有自己的TSS数据，但是需要放到TSS中才能在中断的时候使用到
     set_tss64(&kernel_tss);
 
+    wrmsr(0x174, KERNEL_CS);
+    wrmsr(0x175, current->thread->rsp0);
+    wrmsr(0x176, (uint64_t)system_enter);
+
     printf("init kernel task done!\n");
 }
 

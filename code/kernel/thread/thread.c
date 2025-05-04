@@ -2,6 +2,7 @@
 #include "../include/string.h"
 #include "../include/thread.h"
 #include "../include/print_kernel.h"
+#include "../include/process.h"
 
 extern union task_union kernel_task_union;
 
@@ -117,7 +118,7 @@ __asm__(
 // 创建线程其实就是创建一块PCB并初始化
 // 在执行线程函数之前，首先执行一段引导程序，在执行完线程函数之后，再执行一段退出程序
 // 理论上来说，mm、thread、tss结构体是应该动态申请内存的，但是kmalloc相关的函数似乎还存在bug，所以后续再修改
-int thread_create(uint64_t (*function)(uint64_t), uint64_t arg)
+struct task_struct *thread_create(uint64_t (*function)(uint64_t*), uint64_t *arg)
 {
     struct task_struct *task = kmalloc(SIZE_32K, PG_Kernel);
 
@@ -146,7 +147,7 @@ int thread_create(uint64_t (*function)(uint64_t), uint64_t arg)
     init_pcb_tss(task);
 
     // 初始化regs，因为线程可能是内核线程或者用户线程，但目前来说，它还属于内核线程
-    task->regs = thread->rsp;
+    task->regs = (struct pt_regs*)(thread->rsp0 - sizeof(struct pt_regs));
 
     task->regs->rbx = (uint64_t)function;
     task->regs->rdx = (uint64_t)arg;
@@ -158,7 +159,8 @@ int thread_create(uint64_t (*function)(uint64_t), uint64_t arg)
     task->regs->ds = KERNEL_DS;
     task->regs->es = KERNEL_DS;
     task->regs->ss = KERNEL_DS;
-    return 1;
+
+    return task;
 }
 
 
@@ -229,8 +231,8 @@ void switch_to(struct task_struct *cur, struct task_struct *next)
 {
     // 首先切换TSS
     set_tss64(next->tss);
-
-    printf("set tss done\n");
+    // 在这里激活页表并不会导致错误，因为switch_to函数运行于内核空间，而内核空间是共享给所有用户的，因此激活用户的页表并不会影响内核代码的执行
+    page_dir_activate(next);
 
     // 然后再切换上下文
     __asm__ __volatile__(
@@ -250,6 +252,7 @@ void switch_to(struct task_struct *cur, struct task_struct *next)
 
 
 // 实现的进程调度，现在我们并不设计进程调度算法，只是简单的将当前进程换下处理器
+// 在调用schedule之前，我们首先要找到当前进程的PCB，当用户程序调用schedule时，得到的cur是不正确的
 void schedule()
 {
     struct task_struct *cur = get_current();

@@ -88,7 +88,7 @@ void do_bounds(struct pt_regs *regs, uint64_t irq)
 // 6
 void do_undefined_code(struct pt_regs *regs, uint64_t irq)
 {
-    printf("undefined_code error %x\n", regs->rip);
+    printf("undefined_code error! function:%x  rip:%x     rsp: %x   error:%x\n", regs->func, regs->rip,regs->rsp, regs->errcode);
     while (1)
         ;
 }
@@ -152,7 +152,9 @@ void do_general_protection(struct pt_regs *regs, uint64_t irq)
 // 14
 void do_page_fault(struct pt_regs *regs, uint64_t irq)
 {
-    printf("do_page_fault\n");
+    uint64_t cr2;
+    __asm__ volatile("mov %%cr2, %0" : "=r"(cr2));
+    printf("do_page_fault  cr2:0x%x\n",cr2);
     while (1)
         ;
 }
