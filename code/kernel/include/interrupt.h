@@ -23,6 +23,9 @@ typedef void* intr_handler;
 
 struct pt_regs
 {
+    uint64_t ds;
+    uint64_t es;
+
     uint64_t r15;
     uint64_t r14;
     uint64_t r13;
@@ -31,16 +34,16 @@ struct pt_regs
     uint64_t r10;
     uint64_t r9;
     uint64_t r8;
-    uint64_t rbx;
-    uint64_t rcx;
-    uint64_t rdx;
-    uint64_t rsi;
-    uint64_t rdi;
+
     uint64_t rbp;
-    uint64_t ds;
-    uint64_t es;
+    uint64_t rdi;
+    uint64_t rsi;
+
+    uint64_t rdx;
+    uint64_t rcx;
+    uint64_t rbx;
     uint64_t rax;
-    uint64_t func;                  // 系统调用
+
     uint64_t errcode;
     uint64_t rip;
     uint64_t cs;

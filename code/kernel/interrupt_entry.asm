@@ -15,38 +15,42 @@ intr%1entry:		 ; 每个中断处理程序都要压入中断向量号,所以一�
    %2				 ; 中断若有错误码会压在eip后面 
 ; 以下是保存上下文环境
 ; 在64位系统中，段地址都固定为0，这样我们需要还需要对段寄存器进行压栈保护吗？为了以防万一，还是压一下吧
-; 需要考虑切换数据段寄存器吗？
+; 由于中断可能是由在用户进程运行的时候触发，因此在中断里面需要将代码段和数据段都切换到内核选择子
 
-    push rax
-    push rbx
-    push rcx
-    push rdx
-    push rsi
-    push rdi
-    push rbp
-    push r8
-    push r9
-    push r10
-    push r11
-    push r12
-    push r13
-    push r14
-    push r15
+   push rax
+   push rbx
+   push rcx
+   push rdx
 
-    xor rax, rax
-    mov ax, es
-    push rax
+   push rsi
+   push rdi
+   push rbp
 
-    xor rax, rax
-    mov ax, ds
-    push rax
+   push r8
+   push r9
+   push r10
+   push r11
+   push r12
+   push r13
+   push r14
+   push r15
+
+   xor rax, rax
+   mov ax, ds
+   push rax
+
+   xor rax, rax
+   mov ax, es
+   push rax
+
+   mov ax, 0x10
+   mov ds, ax                   ;将DS切换为内核数据段选择子
+   mov es, ax                   ;将ES切换为内核数据段选择子
 
    mov rdi, rsp;                  ;将rsp的值传递给中断处理函数，中断处理函数通过[rsp+ 18 * 8]就可以知道发生中断时压入的rip地址了，因此就可以修改该值
    mov rsi, %1;                   ;%1是一个宏，表示的是中断向量号，将中断向量号传递给中断处理函数
    lea rax, [rel idt_func_table]  ;这里不使用call [idt_func_table + %1*8]来直接调用，原因似乎是nasm会使用32位地址来访问idt_func_table，导致错误
    call [rax + %1*8]              ;调用idt_func_table中的C版本中断处理函数，注意偏移量要乘以8
-
-
 
    jmp intr_exit
 
@@ -61,9 +65,10 @@ intr_exit:
 ; 以下是恢复上下文环境
 
    pop rax
-   mov ds,ax
-   pop rax
    mov es,ax
+
+   pop rax
+   mov ds,ax
 
    pop r15
    pop r14
@@ -73,9 +78,11 @@ intr_exit:
    pop r10
    pop r9
    pop r8
+
    pop rbp
    pop rdi
    pop rsi
+
    pop rdx
    pop rcx
    pop rbx
@@ -146,6 +153,13 @@ VECTOR 0x37,ZERO	;保留
 global system_exit
 system_exit:
    mov [rsp + 0x80], rax      ; 保存中断返回值
+
+   pop rax
+   mov ds, ax
+
+   pop rax
+   mov es, ax
+
    pop r15
    pop r14
    pop r13
@@ -154,18 +168,17 @@ system_exit:
    pop r10
    pop r9
    pop r8
-   pop rbx
-   pop rcx
-   pop rdx
-   pop rsi
-   pop rdi
+
    pop rbp
+   pop rdi
+   pop rsi
+
+   pop rdx
+   pop rcx
+   pop rbx
    pop rax
-   mov ds, ax
-   pop rax
-   mov es, ax
-   pop rax
-   add rsp, 0x38
+
+   add rsp, 0x30
    db 0x48                   ; sysexit指令的前缀
    sysexit                   ; 返回用户态
 

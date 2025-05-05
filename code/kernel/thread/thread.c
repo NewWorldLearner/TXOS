@@ -83,9 +83,19 @@ uint64_t do_exit(uint64_t code)
         ;
 }
 
+// 曾经在调试的时候，先是怀疑错误出现在kernel_thread_func中，然后在下面的代码中的开始部分插入了jmp kernel_thread_func
+// 结果是死循环，符合预期
+// 然后又将jmp指令插入到第1条pop指令之后，结果就导致了pop指令不断被执行，直到产生缺页异常
 extern void kernel_thread_func(void);
 __asm__(
     "kernel_thread_func:	\n\t"
+
+    "	popq	%rax		\n\t"
+    "	movq	%rax,	%es	\n\t"
+
+    "	popq	%rax	\n\t"
+    "	movq	%rax,	%ds	\n\t"
+
     "	popq	%r15	\n\t"
     "	popq	%r14	\n\t"
     "	popq	%r13	\n\t"
@@ -94,22 +104,17 @@ __asm__(
     "	popq	%r10	\n\t"
     "	popq	%r9	    \n\t"
     "	popq	%r8	    \n\t"
-    "	popq	%rbx	\n\t"
-    "	popq	%rcx	\n\t"
-    "	popq	%rdx	\n\t"
-    "	popq	%rsi	\n\t"
-    "	popq	%rdi	\n\t"
+
     "	popq	%rbp	\n\t"
+    "	popq	%rdi	\n\t"
+    "	popq	%rsi	\n\t"
 
+    "	popq	%rdx	\n\t"
+    "	popq	%rcx	\n\t"
+    "	popq	%rbx	\n\t"
     "	popq	%rax	\n\t"
-    "	movq	%rax,	%ds	\n\t"
 
-    "	popq	%rax		\n\t"
-    "	movq	%rax,	%es	\n\t"
-
-    "	popq	%rax		\n\t"
-
-    "	addq	$0x38,	%rsp	\n\t"
+    "	addq	$0x30,	%rsp	\n\t"
     "	movq	%rdx,	%rdi	\n\t"
     "	callq	*%rbx		\n\t"
     "	movq	%rax,	%rdi	\n\t"

@@ -88,7 +88,7 @@ void do_bounds(struct pt_regs *regs, uint64_t irq)
 // 6
 void do_undefined_code(struct pt_regs *regs, uint64_t irq)
 {
-    printf("undefined_code error! function:%x  rip:%x     rsp: %x   error:%x\n", regs->func, regs->rip,regs->rsp, regs->errcode);
+    printf("undefined_code error!  rip:%x     rsp: %x   error:%x\n", regs->rip,regs->rsp, regs->errcode);
     while (1)
         ;
 }

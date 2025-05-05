@@ -84,7 +84,6 @@ uint64_t start_process(uint64_t *user_process)
     task->thread->rsp = task->thread->rsp0 - sizeof(struct pt_regs);
 
     task->thread->rip = (uint64_t)system_exit;
-
     load_user_process(user_process);
 
     __asm__ __volatile__("movq	%0,	%%rsp	\n\t"
