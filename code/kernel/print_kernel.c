@@ -226,5 +226,10 @@ int printf(char *format, ...)
     va_start(args, format); // 曾经忘记过将args初始化，导致错误
     int count = vsprintf(buf, format, args);
     va_end(args);
-    color_print_string(RED, BLACK, buf);
+    return color_print_string(RED, BLACK, buf);
+}
+
+uint64_t sys_write(char *str)
+{
+    return color_print_string(RED, BLACK, str);
 }

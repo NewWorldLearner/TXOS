@@ -51,8 +51,8 @@ void page_dir_activate(struct task_struct *task)
 void build_process_context()
 {
     struct pt_regs *regs = current->regs;
-    regs->rdx = USER_VADDR_START;
-    regs->rcx = USER_VADDR_STACK;
+    regs->r10 = USER_VADDR_START;
+    regs->r11 = USER_VADDR_STACK;
     regs->ds = 0x30;
     regs->es = 0x30;
 }

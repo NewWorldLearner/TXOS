@@ -42,4 +42,6 @@ int color_print_string(uint32_t FRcolor, uint32_t BKcolor, const char *str);
 
 int printf(char *format, ...);
 
+uint64_t sys_write(char *str);
+
 #endif

@@ -8,6 +8,10 @@
 #include "include/timer.h"
 #include "include/thread.h"
 #include "include/process.h"
+#include "include/syscall-init.h"
+#include "include/stdint.h"
+
+#include "lib/user/syscall.h"
 
 #if APIC
 #include "include/APIC.h"
@@ -21,7 +25,8 @@ extern struct Global_Memory_Descriptor memory_management_struct;
 // 因此，所以才能够调用位于内核空间的printf函数
 uint64_t init(uint64_t arg)
 {
-	printf("I am user program\n");
+	_syscall1(0, "I am user program\n");
+
 	while (1)
 		;
 }
@@ -47,6 +52,8 @@ void Start_Kernel(void)
 	// disk_init();
 
 	// timer_init();
+
+	init_syscall();
 
 
 	init_memory_pool();

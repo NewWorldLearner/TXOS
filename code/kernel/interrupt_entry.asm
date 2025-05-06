@@ -2,7 +2,8 @@
 %define ERROR_CODE nop		 ; 若在相关的异常中cpu已经自动压入了错误码,为保持栈中格式统一,这里不做操作.
 %define ZERO push 0		     ; 若在相关的异常中cpu没有压入错误码,为了统一栈中格式,就手工压入一个0
 
-extern idt_func_table		 ;idt_func_table是C中注册的中断处理程序数组
+extern idt_func_table		 ;idt_func_table是c语言注册的中断处理程序数组
+extern syscall_func_table   ;syscall_func_table是c语言注册的系统调用函数数组
 
 section .data
 global intr_entry_table
@@ -178,9 +179,51 @@ system_exit:
    pop rbx
    pop rax
 
+   xchg	rdx,	r10                  ; 在系统调用之前，r10中保存的是应用层返回地址，执行sysexit指令时从rdx中获取rip
+	xchg	rcx,	r11                  ; 在系统调用之前，r11中保存的是应用层栈指针，执行sysexit指令时从rcx中获取rsp
+
    add rsp, 0x30
    db 0x48                   ; sysexit指令的前缀
    sysexit                   ; 返回用户态
 
 global system_enter
 system_enter:
+
+   cld                            ; 在系统调用入口处设置DF=0是标准做法，确保字符串操作向高地址方向增长
+
+   sub rsp, 0x30
+   
+   push rax
+   push rbx
+   push rcx
+   push rdx
+
+   push rsi
+   push rdi
+   push rbp
+
+   push r8
+   push r9
+   push r10
+   push r11
+   push r12
+   push r13
+   push r14
+   push r15
+
+   xor rax, rax
+   mov ax, es
+   push rax
+
+   mov ax, ds
+   push rax
+
+   mov rax, 0x10                    ; 设置内核数据段选择子
+   mov ds, rax                      ; 更新DS段寄存器
+   mov es, rax                      ; 更新ES段寄存器
+
+   mov rax, [rsp + 8 * 17]          ; rax保存的是系统调用编号，之前已经压栈保持，现在从栈中取出来放到rbx中
+   lea rbx, [rel syscall_func_table]
+   call [rbx + rax * 8]
+
+   jmp system_exit
