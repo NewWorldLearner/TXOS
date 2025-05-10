@@ -222,7 +222,7 @@ system_enter:
    mov ds, rax                      ; 更新DS段寄存器
    mov es, rax                      ; 更新ES段寄存器
 
-   mov rax, [rsp + 8 * 17]          ; rax保存的是系统调用编号，之前已经压栈保持，现在从栈中取出来放到rbx中
+   mov rax, [rsp + 8 * 16]          ; rax保存的是系统调用编号，之前已经压栈保持，现在从栈中取出来放到rbx中
    lea rbx, [rel syscall_func_table]
    call [rbx + rax * 8]
 

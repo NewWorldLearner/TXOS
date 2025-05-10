@@ -21,7 +21,7 @@
         "popq %%r11             \n\t"                         \
         "popq %%r10              \n\t"                        \
         : "=a"(retval)                                        \
-        : "a"(NUMBER),                                        \
+        : "a"(NUMBER)                                        \
         : "memory");                                          \
     retval;                                                   \
 })
@@ -108,7 +108,8 @@
 
 enum SYSCALL_NR
 {
-    SYS_WRITE
+    SYS_WRITE,
+    SYS_YILED
 };
 
 uint64_t write(char *str);
